@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/elfhosted/litterbox/compare/1.3.0...1.3.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* **diagnostics:** surface RD WAF/rate-limit blocks instead of hiding them ([1968607](https://github.com/elfhosted/litterbox/commit/1968607f8628d63bf02bc58f178f25abc0e24008))
+
 ## [1.3.0](https://github.com/elfhosted/litterbox/compare/1.2.0...1.3.0) (2026-05-13)
 
 
