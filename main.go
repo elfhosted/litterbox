@@ -67,6 +67,13 @@ func readVersion() string {
 	return "dev"
 }
 
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -80,13 +87,22 @@ func main() {
 		log.Error("embed sub failed", "err", err)
 		os.Exit(1)
 	}
-	version := readVersion()
-	srv, err := server.New(log, webRoot, version)
+	cfg := server.Config{
+		Version: readVersion(),
+		// REDDIT_MEGATHREAD_URL — operator-rotatable per release cycle.
+		// Defaults to a placeholder so an unset env var doesn't break the
+		// "open megathread" button; the dashboard treats the placeholder
+		// as benign (will still open Reddit, just lands on a 404-ish
+		// search page). Production deploys override via the env-configmap.
+		RedditMegathreadURL: envOr("REDDIT_MEGATHREAD_URL",
+			"https://www.reddit.com/r/StremioAddons/PLACEHOLDER-LITTERBOX-MEGATHREAD"),
+	}
+	srv, err := server.New(log, webRoot, cfg)
 	if err != nil {
 		log.Error("server init failed", "err", err)
 		os.Exit(1)
 	}
-	log.Info("litterbox starting", "version", version)
+	log.Info("litterbox starting", "version", cfg.Version, "megathread", cfg.RedditMegathreadURL)
 
 	httpSrv := &http.Server{
 		Addr:              addr,

@@ -301,25 +301,26 @@
     header.appendChild(a);
   }
 
-  // Best-effort version fetch — populates the #app-version chip in
-  // the header on every page. Server bakes the value in from the
-  // release-please manifest at build time. Silent on failure (dev
-  // build serving without /api/version, transient outage, etc.).
-  async function mountVersion() {
-    const el = document.getElementById("app-version");
-    if (!el) return;
+  // Best-effort config fetch — populates window.litterbox.cfg and the
+  // #app-version chip in the header on every page. /api/config returns
+  // { version, redditMegathreadUrl } from server-side env (version
+  // embedded at build via release-please manifest; megathread URL
+  // operator-rotatable via REDDIT_MEGATHREAD_URL env var). Silent on
+  // failure — consumers must tolerate a missing/empty cfg.
+  async function mountConfig() {
     try {
-      const r = await fetch("/api/version", { cache: "no-store" });
+      const r = await fetch("/api/config", { cache: "no-store" });
       if (!r.ok) return;
-      const v = (await r.text()).trim();
-      if (!v) return;
-      el.textContent = `v${v}`;
+      const cfg = await r.json();
+      window.litterbox = Object.assign(window.litterbox || {}, { cfg });
+      const el = document.getElementById("app-version");
+      if (el && cfg.version) el.textContent = `v${cfg.version}`;
     } catch (_) { /* swallow */ }
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     mountSignout();
-    mountVersion();
+    mountConfig();
 
     // Landing page: if already signed in, skip straight to dashboard.
     const signinBtn = document.getElementById("signin-button");

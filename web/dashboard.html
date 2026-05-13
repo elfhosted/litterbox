@@ -442,7 +442,15 @@
   // Community megathread the "Post to Reddit" button opens. Auto-
   // copies the report to the clipboard so the user can paste into
   // the megathread's comment box.
-  const REDDIT_MEGATHREAD_URL = "https://www.reddit.com/r/StremioAddons/PLACEHOLDER-LITTERBOX-MEGATHREAD";
+  // Resolved at click time so an operator can rotate the megathread URL
+  // by updating the REDDIT_MEGATHREAD_URL env var (configmap-litterbox)
+  // without redeploying. window.litterbox.cfg is populated by app.js's
+  // mountConfig() during DOMContentLoaded; this placeholder is the
+  // fallback for the brief pre-load window or a /api/config failure.
+  function getRedditMegathreadUrl() {
+    return (window.litterbox && window.litterbox.cfg && window.litterbox.cfg.redditMegathreadUrl)
+      || "https://www.reddit.com/r/StremioAddons/PLACEHOLDER-LITTERBOX-MEGATHREAD";
+  }
 
   function loadProbeCache() {
     try { return JSON.parse(localStorage.getItem(PROBE_CACHE_KEY) || "{}"); }
@@ -1601,7 +1609,7 @@
     const report = buildCurrentReport();
     if (!report) return;
     try { await navigator.clipboard.writeText(report); } catch {}
-    window.open(REDDIT_MEGATHREAD_URL, "_blank", "noopener,noreferrer");
+    window.open(getRedditMegathreadUrl(), "_blank", "noopener,noreferrer");
   });
 
   // ----------- Delete flow -----------

@@ -17,12 +17,21 @@
 package server
 
 import (
+	"encoding/json"
 	"io/fs"
 	"log/slog"
 	"net/http"
 
 	"litterbox/internal/proxy"
 )
+
+// Config carries the runtime values the frontend needs (rendered into
+// the page via /api/config). Add fields here when introducing new
+// operator-rotatable knobs — the rest of the wiring is generic.
+type Config struct {
+	Version             string `json:"version"`
+	RedditMegathreadURL string `json:"redditMegathreadUrl"`
+}
 
 // Server holds the mux + the proxy handler. Constructed once at
 // process start; safe for concurrent use because every dependency
@@ -35,15 +44,14 @@ type Server struct {
 // New constructs the HTTP server. webRoot is the filesystem
 // containing the static assets (typically an embed.FS rooted at
 // web/ — declared in main.go so the embed directive resolves
-// relative to the project root). version is the release-please
-// manifest value embedded at build time, served via /api/version
-// for the frontend's header chip.
+// relative to the project root). cfg holds the runtime values the
+// frontend needs to render — served as JSON from /api/config.
 //
 // The server is intentionally minimal: a CORS-bypass proxy for the
-// RD API, a healthz probe, a version endpoint, and the embedded
+// RD API, a healthz probe, a config endpoint, and the embedded
 // static SPA. No server-side state — all pattern data lives in the
 // user's browser localStorage.
-func New(log *slog.Logger, webRoot fs.FS, version string) (*Server, error) {
+func New(log *slog.Logger, webRoot fs.FS, cfg Config) (*Server, error) {
 	mux := http.NewServeMux()
 
 	// /api/proxy — RD CORS workaround. See internal/proxy for the
@@ -52,12 +60,14 @@ func New(log *slog.Logger, webRoot fs.FS, version string) (*Server, error) {
 	mux.Handle("/api/proxy", proxyHandler)
 	mux.Handle("/api/proxy/", proxyHandler)
 
-	// /api/version — plain text; fetched by the SPA on load to
-	// render the version chip in the header.
-	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	// /api/config — JSON; fetched by the SPA on load. Carries the
+	// build-time version (for the header chip) plus operator-rotatable
+	// values like the current Reddit megathread URL.
+	cfgBytes, _ := json.Marshal(cfg)
+	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
-		_, _ = w.Write([]byte(version))
+		_, _ = w.Write(cfgBytes)
 	})
 
 	// /healthz — k8s probe.
