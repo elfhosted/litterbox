@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LitterBox — clean up your Real-Debrid library after the May 2026 rug-pull</title>
+<meta name="description" content="Real-Debrid started filtering 'infringing' content in May 2026 — your library probably has casualties. LitterBox counts the broken torrents and offers a one-click cleanup. Free, OSS, browser-only sign-in.">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1><a href="/" class="logo-link">🐈‍⬛ LitterBox</a></h1>
+  <p class="tagline">Real-Debrid changed the rules. Your library has casualties.</p>
+</header>
+
+<main>
+  <section class="hero">
+    <p>
+      In <strong>May 2026</strong> Real-Debrid started filtering "infringing"
+      content out of its cache, turning a chunk of every long-time user's
+      library into <em>broken</em> 💀, <em>dead</em>, <em>virus-flagged</em> 🦠,
+      and <em>error-state</em> ⚠️ torrents — overnight, without warning, and
+      without surfacing the damage in their official UI.
+    </p>
+    <p>
+      <strong>LitterBox</strong> is the cleanup tool. Sign in via Real-Debrid
+      OAuth (no API key entry, no server-side storage), it tallies the
+      casualties, rates the rot, and offers a one-click bulk-scoop.
+    </p>
+    <button id="signin-button" type="button">🐾 Sign in with Real-Debrid</button>
+    <p id="signin-status" class="muted small"></p>
+  </section>
+
+  <!-- Detection-pattern chips. Some visitors come here purely to
+       check what filename patterns we already detect — they shouldn't
+       have to sign in to find out. Mirrors RD_BLOCKED_FILENAME_REGEX
+       in dashboard.html; keep the two in sync when updating the
+       regex. The exact regex source is in the GitHub repo so a
+       skeptical reader can verify. -->
+  <section class="detect">
+    <h2>🔬 What we detect (no sign-in required)</h2>
+    <p class="muted small">
+      LitterBox's fast pass flags torrents whose filenames match release-naming patterns
+      ElfHosted has documented as correlated with the May 2026 filter. Built from
+      community-reported reports; refined per release.
+    </p>
+    <div class="regex-chips">
+      <div class="chip-group">
+        <p class="chip-group-label">Bracket-tagged groups</p>
+        <span class="chip">[rartv]</span>
+        <span class="chip">[rarbg]</span>
+        <span class="chip">[eztv]</span>
+      </div>
+      <div class="chip-group">
+        <p class="chip-group-label">Scene release names</p>
+        <span class="chip">YTS</span>
+        <span class="chip">Erai-raws</span>
+        <span class="chip">CR</span>
+      </div>
+      <div class="chip-group">
+        <p class="chip-group-label">Source markers</p>
+        <span class="chip">WEB-DL</span>
+        <span class="chip">WEBDL</span>
+        <span class="chip">WEB-Rip</span>
+        <span class="chip">WEBRip</span>
+        <span class="chip">AMZN</span>
+        <span class="chip">DSNP</span>
+      </div>
+    </div>
+    <p class="muted small">
+      The fast pass catches the bulk of the May 2026 class instantly.
+      A second <strong>deep probe</strong> (opt-in) hits <code>/unrestrict/link</code>
+      per-torrent to surface the long tail the regex misses.
+      <a href="https://github.com/elfhosted/litterbox/blob/main/web/dashboard.html" target="_blank" rel="noopener">Verify the source</a>.
+    </p>
+  </section>
+
+  <section class="context">
+    <h2>📰 What happened</h2>
+    <ul>
+      <li>
+        <a href="https://rd-rug-pull.netlify.app/" target="_blank" rel="noopener">
+          <strong>rd-rug-pull.netlify.app</strong></a>
+        — the community-maintained timeline of what changed, when, and why.
+      </li>
+      <li>
+        <a href="https://www.reddit.com/r/debridmediamanager/comments/1t9l96i/realdebrids_infringing_file_errors_are/" target="_blank" rel="noopener">
+          <strong>r/debridmediamanager</strong>: "RealDebrid's infringing-file errors are…"</a>
+        — first-hand reports from users finding their libraries half-broken.
+      </li>
+      <li>
+        <a href="https://www.reddit.com/r/StremioAddons/comments/1t9qa96/elfhosteds_bandaid_fix_for_the_may_2026_rd/" target="_blank" rel="noopener">
+          <strong>r/StremioAddons</strong>: ElfHosted's band-aid fix</a>
+        — the server-side mitigation we shipped for Stremio users so search
+        keeps finding cached releases despite the new filter.
+      </li>
+    </ul>
+    <p class="muted small">
+      We've been knee-deep in this since day one. LitterBox is the
+      <em>client-side</em> half of the response: a way for anyone, ElfHosted
+      customer or not, to see how bad their library got hit and clean up.
+    </p>
+  </section>
+
+  <section class="trust">
+    <h2>🔐 How it works (and why you can trust it)</h2>
+    <ol>
+      <li>Click sign in. Real-Debrid shows you a 5-character code + a verify URL.</li>
+      <li>Paste the code on Real-Debrid's site. The browser polls until you confirm.</li>
+      <li>Your token lives only in <strong>your browser's localStorage</strong> —
+      never touches our server beyond a stateless proxy that forwards your
+      request to <code>api.real-debrid.com</code>. No cookies, no sessions,
+      no logging.</li>
+    </ol>
+    <p class="muted small">
+      Open source — read the proxy code at
+      <a href="https://github.com/elfhosted/litterbox" target="_blank" rel="noopener">github.com/elfhosted/litterbox</a>.
+    </p>
+  </section>
+
+  <section class="bigger-picture">
+    <h2>🪦 The bigger picture (for Plex / Jellyfin / Emby users)</h2>
+    <p>
+      Stremio users are mostly fine — Stremio queries debrids on-demand,
+      so a filtered release just means hitting a different one next click.
+    </p>
+    <p>
+      <strong>Personal-library users (Plex / Jellyfin / Emby) are hit hardest.</strong>
+      Your stack <em>curates</em> — Sonarr / Radarr grab a release once and
+      expect it to be there next month. RD's filter turns those long-tail
+      catalog items into broken symlinks, and there's no good way to know
+      which ones rotted without auditing the whole library (which is exactly
+      what LitterBox does).
+    </p>
+    <p>
+      Cleanup is the short-term fix. If your library scores high on the
+      stink-meter, the structural answer is to <strong>migrate from Real-Debrid to TorBox</strong>
+      — and our CatBox bundles do exactly that, with your existing library transitioned
+      across rather than binned.
+      <a href="https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&amp;utm_medium=landing&amp;utm_campaign=rd-migration" target="_blank" rel="noopener">
+        ElfHosted's TorBox-backed CatBox personal media stacks</a>
+      are API and policy compliant, fully endorsed by TorBox, and keep
+      the same Sonarr / Radarr workflow you already use. LitterBox cleans
+      up what's already broken; CatBox is the path off Real-Debrid
+      without losing what still works.
+    </p>
+  </section>
+</main>
+
+<footer>
+  <p class="muted small">
+    Built by <a href="https://elfhosted.com">ElfHosted</a>.
+    No tracking, no analytics, no email signup. Just a tool.
+  </p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

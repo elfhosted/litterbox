@@ -1,0 +1,1736 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LitterBox — dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-page="dashboard">
+<header>
+  <h1><a href="/" class="logo-link">🐈‍⬛ LitterBox</a></h1>
+  <p class="tagline">Your Real-Debrid library, post-mortem.</p>
+</header>
+
+<main>
+  <!-- Compact detection-pattern strip — visible the whole time
+       (during scan + after). Mirrors RD_BLOCKED_FILENAME_REGEX
+       below; keep the two in sync when updating the regex. -->
+  <details class="detect-strip">
+    <summary>🔬 LitterBox detects these filename patterns out of the box <span class="muted small">(click to expand)</span></summary>
+    <div class="regex-chips">
+      <div class="chip-group">
+        <p class="chip-group-label">Bracket-tagged groups</p>
+        <span class="chip">[rartv]</span>
+        <span class="chip">[rarbg]</span>
+        <span class="chip">[eztv]</span>
+      </div>
+      <div class="chip-group">
+        <p class="chip-group-label">Scene release names</p>
+        <span class="chip">YTS</span>
+        <span class="chip">Erai-raws</span>
+        <span class="chip">CR</span>
+      </div>
+      <div class="chip-group">
+        <p class="chip-group-label">Source markers</p>
+        <span class="chip">WEB-DL</span>
+        <span class="chip">WEBDL</span>
+        <span class="chip">WEB-Rip</span>
+        <span class="chip">WEBRip</span>
+        <span class="chip">AMZN</span>
+        <span class="chip">DSNP</span>
+      </div>
+    </div>
+    <p class="muted small">
+      Fast-pass detection. The deep-probe step below catches the long tail.
+    </p>
+  </details>
+
+  <section id="loading">
+    <p id="loading-status">👃 Sniffing your library…</p>
+    <progress id="scan-progress" max="100" value="0"></progress>
+    <p class="muted small" id="scan-detail"></p>
+  </section>
+
+  <section id="results" hidden>
+    <h2>🧹 The dirt has been audited</h2>
+
+    <!-- Headline stink rating: tongue-in-cheek 0-10 score driven by
+         the broken-bytes percentage. Surfaces the visceral "how bad
+         is it?" answer above the breakdown so users get the gut-
+         punch before the granular numbers. -->
+    <div class="stink" id="stink-card">
+      <p class="stink-prelude">your RD library smells:</p>
+      <p class="stink-rating" id="stink-rating">—</p>
+      <p class="stink-detail" id="stink-detail">—</p>
+    </div>
+
+    <!-- Composition pie + legend. The pie is a single conic-gradient
+         backed div — no charting library, no JS canvas. The legend
+         lists each segment with its swatch, count, and percentage. -->
+    <div class="pie-row">
+      <div class="pie" id="pie"></div>
+      <ul class="legend" id="pie-legend"></ul>
+    </div>
+
+    <div class="counts">
+      <div class="count-card"><p class="num" id="count-total">—</p><p class="label">total</p></div>
+      <div class="count-card healthy"><p class="num" id="count-healthy">—</p><p class="label">😺 healthy</p></div>
+      <div class="count-card broken"><p class="num" id="count-broken">—</p><p class="label">💀 broken</p></div>
+    </div>
+
+    <!-- Library statistics: size, broken weight, top broken cause. -->
+    <div class="stats">
+      <div class="stat-card">
+        <p class="stat-icon">📦</p>
+        <p class="stat-num" id="stat-library-size">—</p>
+        <p class="stat-label">library size</p>
+      </div>
+      <div class="stat-card warn">
+        <p class="stat-icon">🦨</p>
+        <p class="stat-num" id="stat-broken-size">—</p>
+        <p class="stat-label" id="stat-broken-pct">dead weight</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-icon">🏆</p>
+        <p class="stat-num" id="stat-top-status">—</p>
+        <p class="stat-label">stinkiest reason</p>
+      </div>
+    </div>
+
+    <!-- Filtered-class callout — only rendered when the May 2026
+         regex catches torrents RD's status field claims are healthy.
+         Tells the user "this isn't the old broken-statuses story —
+         this is the new rug-pull, and the official UI doesn't show
+         it". Most users will be discovering the May-2026 class for
+         the first time here so a sentence of context helps. -->
+    <div id="filtered-callout" class="filtered-callout" hidden>
+      <p>
+        <strong>🚫 <span id="filtered-callout-count">0</span> of those are <code>infringing_file</code> — Real-Debrid's May 2026 filter.</strong>
+        These appear <em>healthy</em> in Real-Debrid's UI — same status, same progress, same link — but the link is rejected with HTTP 451 the moment anyone tries to play them. LitterBox flags them by filename pattern so you don't have to per-torrent probe.
+      </p>
+      <p class="muted small">
+        <a href="https://rd-rug-pull.netlify.app/" target="_blank" rel="noopener">Background on what changed</a> ·
+        <a href="https://www.reddit.com/r/StremioAddons/comments/1t9qa96/elfhosteds_bandaid_fix_for_the_may_2026_rd/" target="_blank" rel="noopener">our server-side mitigation</a>
+      </p>
+    </div>
+
+    <!-- ============ Step 1: Quick wipe ============
+         Scoops everything the fast-pass detection (status field +
+         baked-in filename regex) already flagged as broken.
+         Instant value — no per-torrent probing required. -->
+    <section class="step" id="step-quickwipe" hidden>
+      <h3>① Quick wipe</h3>
+      <p class="muted small">
+        Scoop the torrents the fast pass already flagged
+        (<strong id="quickwipe-count">0</strong> rows) — broken
+        statuses RD admits to, plus filename-regex hits for the
+        May 2026 filter. No further probing needed.
+      </p>
+      <p>
+        <button id="delete-button" type="button" class="danger">🗑️ Quick wipe</button>
+        <label class="dryrun-toggle small muted">
+          <input type="checkbox" id="backup-toggle" checked>
+          💾 Download JSON backup before deleting (recommended)
+        </label>
+        <label class="dryrun-toggle small muted">
+          <input type="checkbox" id="dry-run-toggle">
+          🧪 Dry-run mode (no actual deletes — just for testing)
+        </label>
+      </p>
+    </section>
+
+    <!-- ============ Step 2: Deep clean ============
+         For each "healthy"-looking torrent (not flagged by Step 1),
+         POST /unrestrict/link and check for HTTP 451 + error_code 35.
+         Catches the May 2026 filter class that the filename regex
+         missed. Rate-limited client-side; abortable; cached in
+         localStorage per-hash so a re-scan doesn't re-probe. -->
+    <section class="step" id="step-deepclean" hidden>
+      <h3>② Deep clean (optional)</h3>
+      <p class="muted small" id="deepclean-intro">
+        Probe every healthy-looking torrent
+        (<strong id="deepclean-count">0</strong> rows) via
+        <code>/unrestrict/link</code> to catch May-2026 filtered
+        torrents the regex missed. Rate-limited at 250 req/min;
+        results cached per-hash so a re-scan picks up where you
+        left off. Estimated time:
+        <strong id="deepclean-eta">—</strong>.
+      </p>
+      <p id="deepclean-actions">
+        <button id="deepclean-button" type="button">🔍 Run deep clean</button>
+      </p>
+      <div id="deepclean-progress" hidden>
+        <progress id="deepclean-bar" max="100" value="0"></progress>
+        <p class="muted small" id="deepclean-detail">starting…</p>
+        <p><button id="deepclean-abort" type="button" class="muted">Abort</button></p>
+      </div>
+      <div id="deepclean-result" hidden>
+        <p>
+          <strong id="deepclean-result-summary">—</strong>
+        </p>
+        <p id="deepclean-scoop-row" hidden>
+          <button id="deepclean-scoop-button" type="button" class="danger">🗑️ Scoop deep-clean catches</button>
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ Discovery / Reddit report ============ -->
+    <section class="step" id="step-discovery" hidden>
+      <h3>📰 File a LitterBox report</h3>
+      <p class="muted small">
+        Post your library's results to the community — your
+        breakdown, your stink rating, and any candidate filter
+        patterns your library surfaced. One click copies the report
+        to your clipboard and opens the megathread; paste into the
+        comment box and submit. Every report helps refine the next
+        LitterBox release.
+      </p>
+      <p class="muted small">
+        <strong>Candidate filter patterns from your library:</strong>
+      </p>
+      <ul id="discovery-list" class="discovery-list"></ul>
+      <p>
+        <button id="discovery-reddit" type="button">🚀 Copy report + open r/StremioAddons →</button>
+        <button id="discovery-copy" type="button" class="muted">📋 Copy report only</button>
+      </p>
+    </section>
+
+    <p id="all-clean" hidden class="ok">🧼 Nothing to clean up — your library is spotless.</p>
+
+    <!-- Share-the-news buttons. Three tones; each generates the
+         text from the stats just computed. Twitter intent URL +
+         clipboard copy for cross-platform reach without us managing
+         per-platform OAuth or instance picking. -->
+    <section class="share">
+      <h3>📣 Share the carnage</h3>
+      <p class="muted small">Three pre-canned posts you can fire off in one click. We don't track anything — these just open Twitter/X or copy to your clipboard.</p>
+
+      <div class="share-card">
+        <p class="share-tone">😤 Vent</p>
+        <p class="share-text" id="share-shame">…</p>
+        <p class="share-actions">
+          <button type="button" class="muted" data-share-copy="share-shame">📋 Copy</button>
+          <button type="button" data-share-tweet="share-shame">𝕏 Tweet</button>
+          <button type="button" class="share-reroll" data-share-reroll="share-shame">🎲 Reroll</button>
+        </p>
+      </div>
+
+      <div class="share-card">
+        <p class="share-tone">🐈‍⬛ Brag</p>
+        <p class="share-text" id="share-tool">…</p>
+        <p class="share-actions">
+          <button type="button" class="muted" data-share-copy="share-tool">📋 Copy</button>
+          <button type="button" data-share-tweet="share-tool">𝕏 Tweet</button>
+          <button type="button" class="share-reroll" data-share-reroll="share-tool">🎲 Reroll</button>
+        </p>
+      </div>
+
+      <div class="share-card">
+        <p class="share-tone">🚪 Plot escape</p>
+        <p class="share-text" id="share-elfhosted">…</p>
+        <p class="share-actions">
+          <button type="button" class="muted" data-share-copy="share-elfhosted">📋 Copy</button>
+          <button type="button" data-share-tweet="share-elfhosted">𝕏 Tweet</button>
+          <button type="button" class="share-reroll" data-share-reroll="share-elfhosted">🎲 Reroll</button>
+        </p>
+      </div>
+    </section>
+  </section>
+
+  <section id="confirm" hidden>
+    <h2>🚨 Confirm bulk scoop</h2>
+    <p>
+      You're about to delete <strong id="confirm-count">0</strong> broken torrents
+      from your Real-Debrid library. This <strong>cannot be undone</strong> via LitterBox —
+      you'd need to re-add each magnet manually.
+    </p>
+    <p id="confirm-dry-banner" hidden class="ok small">🧪 Dry-run mode is ON — no actual deletes will be sent.</p>
+    <p>Type <code>delete</code> to confirm:</p>
+    <input type="text" id="confirm-input" class="confirm-input" autocomplete="off" autocapitalize="off">
+    <p>
+      <button id="confirm-button" type="button" class="danger" disabled>Scoop 'em</button>
+      <button id="cancel-button" type="button" class="muted">Cancel</button>
+    </p>
+  </section>
+
+  <section id="deleting" hidden>
+    <h2>🧹 Scooping…</h2>
+    <progress id="delete-progress" max="100" value="0"></progress>
+    <p class="muted small" id="delete-detail"></p>
+  </section>
+
+  <section id="done" hidden>
+    <h2 id="done-title">🐈‍⬛ Done</h2>
+    <!-- Before/after stink comparison — same rating function as the
+         scan headline, computed once with pre-delete stats, once with
+         post-delete stats (broken bytes/count subtracted off). -->
+    <div class="before-after" id="before-after">
+      <div class="ba-cell">
+        <p class="ba-label">before</p>
+        <p class="ba-rating" id="ba-before-rating">—</p>
+        <p class="ba-detail muted small" id="ba-before-detail">—</p>
+      </div>
+      <div class="ba-arrow">→</div>
+      <div class="ba-cell">
+        <p class="ba-label">after</p>
+        <p class="ba-rating" id="ba-after-rating">—</p>
+        <p class="ba-detail muted small" id="ba-after-detail">—</p>
+      </div>
+    </div>
+    <p id="done-detail" class="muted small"></p>
+    <p>
+      <button id="rescan-button" type="button">🔄 Re-scan library</button>
+      <button id="signout-button" type="button" class="muted">Sign out</button>
+    </p>
+  </section>
+</main>
+
+<footer>
+  <p class="muted small">
+    Built by <a href="https://elfhosted.com">ElfHosted</a>.
+    Tired of broken Real-Debrid torrents?
+    <a href="https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&amp;utm_medium=dashboard&amp;utm_campaign=rd-migration">
+      Our CatBox personal media stacks run on TorBox</a> — lazy-materialise so nothing
+    ever sits broken in your library.
+  </p>
+</footer>
+
+<script src="/static/app.js"></script>
+<script>
+// Dashboard logic. Depends on /static/app.js for the rate-limited
+// proxiedFetch + localStorage helpers (exported on window.litterbox).
+
+(function () {
+  "use strict";
+
+  // BROKEN_STATUSES — torrents RD itself admits are broken via the
+  // `status` field. Four categories taken from RD's documented enum.
+  // Mirrors catbox's BrokenRDStatuses (internal/rdimport/rd_client.go)
+  // so the taxonomy stays consistent across our tools.
+  const BROKEN_STATUSES = {
+    error:        "⚠️ error",
+    virus:        "🦠 virus-flagged",
+    dead:         "💀 dead",
+    magnet_error: "🧲❌ bad magnet",
+  };
+
+  // FILTERED_STATUS — synthesized client-side, NOT a real RD status.
+  // RD's May 2026 "infringing_file" filter doesn't surface on the
+  // /torrents list (we confirmed against a live filtered torrent:
+  // status reports "downloaded", progress 100, link present — only
+  // /unrestrict/link returns HTTP 451 + error_code 35). Probing every
+  // torrent via /unrestrict/link is correct but takes ~14h for a 10k
+  // library at RD's 250-req/min ceiling.
+  //
+  // The regex below is the same pattern ElfHosted's server-side band-
+  // aid uses to predict filter hits from the filename alone. It's a
+  // heuristic — fast, free, no API calls — that catches the bulk of
+  // the May 2026 class with near-zero false negatives on the affected
+  // population. False positives are possible (legitimate WEB-DL
+  // releases that still work) and the user can always untick those
+  // before scooping.
+  //
+  // Pattern decomposition:
+  //   \[(rartv|rarbg|eztv)\]     bracket-tagged release groups
+  //   \b(YTS|Erai-raws|CR)\b     word-bounded scene names
+  //   (WEB-?Rip|WEB-?DL|AMZN|DSNP) source identifiers; the optional
+  //                                hyphen catches "WEBRip" and
+  //                                "WEB-Rip" alike (real-world
+  //                                torrents use both spellings)
+  const RD_BLOCKED_FILENAME_REGEX =
+    /\[(rartv|rarbg|eztv)\]|\b(YTS|Erai-raws|CR)\b|(WEB-?Rip|WEB-?DL|AMZN|DSNP)/i;
+
+  // The synthesized status key + label. Pretends to be just another
+  // entry in the broken set from the consumer's POV. Two variants:
+  // a long label for the legend + callout where there's room for
+  // the full descriptor, and a short label for tight UI slots like
+  // the "worst offender" stat card.
+  // Labels mirror RD's actual error_code literal ("infringing_file")
+  // so the term in the UI matches what users see in /unrestrict/link
+  // responses, forum posts, and the verbatim "infringing_file errors
+  // everywhere" complaints across r/StremioAddons and X. The May-2026
+  // timeline context lives in the surrounding narrative copy, not in
+  // the status label itself.
+  const FILTERED_STATUS_KEY = "filtered";
+  const FILTERED_STATUS_LABEL = "🚫 infringing_file";
+  const FILTERED_STATUS_SHORT = "🚫 infringing_file";
+
+  // Combined view: which RD status (real or synthesized) is broken.
+  // Order matters when both could apply — RD's own status takes
+  // precedence so the user understands the most-explicit signal first.
+  function classifyStatus(torrent) {
+    if (BROKEN_STATUSES.hasOwnProperty(torrent.status)) return torrent.status;
+    if (RD_BLOCKED_FILENAME_REGEX.test(torrent.filename || "")) {
+      return FILTERED_STATUS_KEY;
+    }
+    return null; // healthy / in-flight
+  }
+  const isBroken = (t) => classifyStatus(t) !== null;
+
+  // Friendly label dispatch — consumes the synthesized + real labels
+  // through one entry point. The `short` variant is for tight slots
+  // (stat-card titles) that can't fit the full descriptor; falls
+  // back to the long label for statuses that don't have a short
+  // form (the four real RD statuses are already short).
+  function labelFor(status, opts) {
+    if (status === FILTERED_STATUS_KEY) {
+      return (opts && opts.short) ? FILTERED_STATUS_SHORT : FILTERED_STATUS_LABEL;
+    }
+    return BROKEN_STATUSES[status] || status;
+  }
+
+  // Dry-run flag persisted in localStorage so a refresh keeps the
+  // local-testing posture across reloads. Default OFF — real deletes
+  // are the production case.
+  const DRY_RUN_KEY = "litterbox:dryRun";
+  const isDryRun = () => localStorage.getItem(DRY_RUN_KEY) === "1";
+
+  function $(id) { return document.getElementById(id); }
+  function show(id) { $(id).hidden = false; }
+  function hide(id) { $(id).hidden = true; }
+
+  // Guard: redirect to sign-in if no token.
+  if (!localStorage.getItem("rd:accessToken")) {
+    window.location.href = "/";
+    return;
+  }
+
+  // Wire the dry-run toggle to localStorage on page load.
+  const dryToggle = $("dry-run-toggle");
+  dryToggle.checked = isDryRun();
+  dryToggle.addEventListener("change", (e) => {
+    if (e.target.checked) localStorage.setItem(DRY_RUN_KEY, "1");
+    else localStorage.removeItem(DRY_RUN_KEY);
+  });
+
+  // _allTorrents holds the full /torrents response from the most
+  // recent scan, used for the backup download. Captured at scan time
+  // so the backup represents what the user actually saw when they
+  // clicked apply, not whatever RD's state looks like at apply time.
+  let _allTorrents = [];
+
+  // _deepCatchIds is populated by runDeepClean — the subset of
+  // torrents that LOOKED healthy on the fast pass but came back
+  // 451 + error_code 35 from /unrestrict/link.
+  let _deepCatchIds = [];
+
+  // _activeScoopMode tracks which step's results the current
+  // delete-flow is consuming — "quickwipe" or "deepclean". Used by
+  // the delete loop to look up the right id set, and by the done-
+  // screen copy to say "scooped via X". Pre-set to "quickwipe" so
+  // the historical single-button flow stays correct.
+  let _activeScoopMode = "quickwipe";
+
+  // ============================================================
+  // localStorage keys for the discovery layer. All client-side —
+  // no server ever sees any of this data.
+  // ============================================================
+
+  // Per-hash probe outcome cache. Survives across scan sessions so
+  // a refresh doesn't redo a 30-minute probe walk. Shape:
+  //   { "<hash>": { outcome: "filtered"|"healthy", at: <unix-ms> } }
+  // Reads tolerate missing keys; writes happen as the probe runs.
+  const PROBE_CACHE_KEY = "litterbox:probeCache";
+
+  // Append-only release-field aggregates across all probe sessions.
+  // Shape: { "<field>:<value>": { f: <n>, h: <n> } } — e.g.
+  // "group:flux", "source:webdl", "codec:x264". Feeds the discovery
+  // analysis; never sent anywhere.
+  const RELEASE_AGG_KEY = "litterbox:releaseAggregates";
+
+  // Community megathread the "Post to Reddit" button opens. Auto-
+  // copies the report to the clipboard so the user can paste into
+  // the megathread's comment box.
+  const REDDIT_MEGATHREAD_URL = "https://www.reddit.com/r/StremioAddons/PLACEHOLDER-LITTERBOX-MEGATHREAD";
+
+  function loadProbeCache() {
+    try { return JSON.parse(localStorage.getItem(PROBE_CACHE_KEY) || "{}"); }
+    catch { return {}; }
+  }
+  function saveProbeCache(cache) {
+    localStorage.setItem(PROBE_CACHE_KEY, JSON.stringify(cache));
+  }
+  function loadReleaseAgg() {
+    try { return JSON.parse(localStorage.getItem(RELEASE_AGG_KEY) || "{}"); }
+    catch { return {}; }
+  }
+  function saveReleaseAgg(agg) {
+    localStorage.setItem(RELEASE_AGG_KEY, JSON.stringify(agg));
+  }
+
+  // maybeRebuildAggregates — on first scan after upgrade, populate
+  // releaseAggregates by re-parsing every cached probe verdict's
+  // filename. Lets users carry forward signal from prior probe
+  // sessions without re-paying the /unrestrict cost.
+  function maybeRebuildAggregates(torrents) {
+    const agg = loadReleaseAgg();
+    if (Object.keys(agg).length > 0) return;
+    const cache = loadProbeCache();
+    if (Object.keys(cache).length === 0) return;
+    let dirty = false;
+    for (const t of torrents) {
+      const v = cache[t.hash];
+      if (!v) continue;
+      if (v.outcome !== "filtered" && v.outcome !== "healthy") continue;
+      const parsed = parseRelease(t.filename);
+      for (const [field, value] of Object.entries(parsed)) {
+        if (!value) continue;
+        const key = `${field}:${value}`;
+        if (!agg[key]) agg[key] = { f: 0, h: 0 };
+        if (v.outcome === "filtered") agg[key].f++;
+        else agg[key].h++;
+        dirty = true;
+      }
+    }
+    if (dirty) saveReleaseAgg(agg);
+  }
+
+  // ============================================================
+  // parseRelease — structured field extraction from a torrent
+  // filename. Returns a subset of {group, source, codec,
+  // resolution, audio}; absent fields are undefined. Targets the
+  // common scene/p2p naming conventions. Output values are
+  // lowercased for canonical aggregation keys.
+  // ============================================================
+  function parseRelease(filename) {
+    if (!filename) return {};
+    let base = filename.replace(/\.(mkv|mp4|avi|m4v|mov|wmv|flv|webm|ts)$/i, "");
+    while (/\[[^\]]*\]$/.test(base)) {
+      base = base.replace(/\[[^\]]*\]$/, "").trim();
+    }
+    const text = base.replace(/[._]/g, " ");
+    const out = {};
+
+    const res = text.match(/\b(2160p|1080p|720p|480p|4k|uhd)\b/i);
+    if (res) out.resolution = res[1].toLowerCase();
+
+    const codec = text.match(/\b(x265|x264|h\.?265|h\.?264|hevc|avc|vp9|av1|xvid|divx)\b/i);
+    if (codec) out.codec = codec[1].toLowerCase().replace(/\./g, "");
+
+    const source = text.match(/\b(WEB-?DL|WEB-?Rip|BD-?Rip|BR-?Rip|DVD-?Rip|HD-?Rip|HDTV|HD-?CAM|HD-?TC|HD-?TS|BluRay|BD-?Remux|REMUX|AMZN|DSNP|NFLX|HMAX|MAX|ATVP|HULU|PCOK|PMTP)\b/i);
+    if (source) out.source = source[1].toLowerCase().replace(/-/g, "");
+
+    const audio = text.match(/\b(DDP?\d(\.\d)?|AAC\d?(\.\d)?|AC-?3|E?AC-?3|DTS(-HD)?(-MA)?|FLAC|MP3|Opus|TrueHD|Atmos)\b/i);
+    if (audio) out.audio = audio[0].toLowerCase().replace(/[.-]/g, "");
+
+    // Release group — last hyphen-separated fragment in the base.
+    // Defensively skip values that are clearly codec/channel
+    // markers rather than groups.
+    const groupMatch = base.match(/-([A-Za-z0-9_.]+)$/);
+    if (groupMatch) {
+      const candidate = groupMatch[1].toLowerCase();
+      const looksLikeGroup =
+        !/^[xh]\.?\d{3}$/.test(candidate) &&
+        !/^\d+\.\d+$/.test(candidate) &&
+        !/^(aac|ac3|ddp?|dts(-?hd)?(-?ma)?|flac|mp3|opus|truehd|atmos)\d?(\.\d)?$/i.test(candidate);
+      if (looksLikeGroup) out.group = candidate;
+    }
+
+    return out;
+  }
+
+  // bakedInRegexTokens is the set of tokens already covered by
+  // RD_BLOCKED_FILENAME_REGEX — used by the discovery analysis to
+  // filter OUT candidates that wouldn't actually be a new pattern.
+  // Kept in sync manually with the regex above; small enough that
+  // a comment-driven approach is fine.
+  const bakedInRegexTokens = new Set([
+    "rartv", "rarbg", "eztv", "yts", "erai-raws", "cr",
+    "webrip", "web-dl", "amzn", "dsnp",
+  ]);
+
+  // ============================================================
+  // Deep probe: POST /unrestrict/link for every "healthy"-looking
+  // torrent, surface HTTP 451 + error_code 35 as ground-truth
+  // filtered. Rate-limited by the existing proxiedFetch wrapper
+  // (240ms / 250 req/min); abortable via the AbortController
+  // pattern; per-hash results cached to localStorage so a refresh
+  // mid-probe picks up where it left off.
+  // ============================================================
+
+  // Holds an in-flight abort signal so the abort button can cancel
+  // the probe loop mid-flight. AbortError percolates up and the
+  // loop unwinds cleanly.
+  let _probeAbort = null;
+
+  async function runDeepProbe(toProbe, onProgress) {
+    const cache = loadProbeCache();
+    const releaseAgg = loadReleaseAgg();
+    let probedNow = 0, filtered = 0, healthy = 0, deadLink = 0, cached = 0, errored = 0;
+    const filteredTorrents = [];
+    const healthyTorrents = [];
+    const deadLinkTorrents = [];
+    const abortCtl = new AbortController();
+    _probeAbort = abortCtl;
+
+    // dead-link cache TTL — these outcomes are "the hoster CDN was
+    // down at probe time" which CAN recover. We re-check after 24h
+    // so a re-scan picks up resurrected items. Filtered / healthy
+    // never expire (filter is permanent; healthy stays healthy).
+    const DEAD_LINK_TTL_MS = 24 * 60 * 60 * 1000;
+
+    // Batched cache flush — write every CACHE_FLUSH_EVERY probes
+    // instead of after every iteration. localStorage.setItem is
+    // synchronous and JSON.stringify is O(n) over the entire cache,
+    // so flushing per-row burns visible CPU on a multi-hundred
+    // probe run. Worst case on abort/crash, we lose the last <25
+    // verdicts — acceptable, the user will just re-probe them.
+    const CACHE_FLUSH_EVERY = 25;
+    let dirty = 0;
+    const flushCache = () => {
+      if (dirty === 0) return;
+      saveProbeCache(cache);
+      dirty = 0;
+    };
+
+    try {
+      for (let i = 0; i < toProbe.length; i++) {
+        if (abortCtl.signal.aborted) throw new DOMException("aborted", "AbortError");
+        const t = toProbe[i];
+        let outcome = (cache[t.hash] && cache[t.hash].outcome) || null;
+
+        // Honor TTL on dead-link cache entries — those can recover,
+        // unlike filtered/healthy which are stable. After the TTL
+        // expires we drop the cached verdict and re-probe.
+        if (outcome === "dead-link" && cache[t.hash] && (Date.now() - cache[t.hash].at) > DEAD_LINK_TTL_MS) {
+          outcome = null;
+        }
+        // Track whether this row's outcome came from cache vs a
+        // fresh probe, so we can keep the counters mutually
+        // exclusive (cached items used to also be counted in
+        // filtered/healthy, which made the running tally exceed the
+        // bar position).
+        let fromCache = !!outcome;
+
+        if (!outcome) {
+          // Not cached — actually call RD.
+          if (!t.links || t.links.length === 0) {
+            // No link to probe — treat as inconclusive, skip.
+            errored++;
+            onProgress({ i, total: toProbe.length, filtered, healthy, cached, errored });
+            continue;
+          }
+          const link = t.links[0];
+          try {
+            const body = new URLSearchParams({ link }).toString();
+            const r = await window.litterbox.proxiedFetch(
+              `/rest/1.0/unrestrict/link`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body,
+                // onRetry hook lets us surface mid-retry backoff
+                // to the UI so a long 429 wait doesn't read as
+                // "stuck" (field report on first deep probe).
+                onRetry: ({ reason, attempt, backoffMs }) => {
+                  onProgress({
+                    i, total: toProbe.length, filtered, healthy, cached, errored,
+                    retry: { reason, attempt, backoffMs },
+                  });
+                },
+              }
+            );
+            if (r.status === 451) {
+              outcome = "filtered";
+            } else if (r.status === 503) {
+              // 503 with a known RD stable-error body — hoster
+              // unavailable / in maintenance. doProxied already
+              // skipped retry on these, so we get here fast. Treat
+              // as a third outcome category alongside filtered and
+              // healthy — different cause, but equally "this torrent
+              // doesn't work" from the user's POV. Scooping is up to
+              // the user.
+              let isDeadLink = false;
+              try {
+                const j = await r.clone().json();
+                if (j.error_code === 19 || j.error_code === 23) isDeadLink = true;
+              } catch { /* unexpected 503 body — fall through to errored */ }
+              if (isDeadLink) {
+                outcome = "dead-link";
+              } else {
+                errored++;
+                onProgress({ i, total: toProbe.length, filtered, healthy, deadLink, cached, errored });
+                continue;
+              }
+            } else if (r.status === 401 || r.status === 403) {
+              // Token rejected mid-probe — flush whatever we have
+              // before bouncing so the user's progress isn't lost.
+              flushCache();
+              localStorage.clear();
+              window.location.href = "/";
+              return null;
+            } else if (r.ok) {
+              // 200 means the unrestrict succeeded — torrent is
+              // genuinely playable. Mark healthy.
+              outcome = "healthy";
+            } else {
+              // Other errors (429 with retry budget exhausted, other
+              // 5xx without a known stable-error body, etc.) —
+              // inconclusive. DON'T cache; a future probe can retry.
+              errored++;
+              onProgress({ i, total: toProbe.length, filtered, healthy, deadLink, cached, errored });
+              continue;
+            }
+            cache[t.hash] = { outcome, at: Date.now() };
+            dirty++;
+            if (dirty >= CACHE_FLUSH_EVERY) flushCache();
+            probedNow++;
+          } catch (e) {
+            if (e.name === "AbortError") throw e;
+            errored++;
+            onProgress({ i, total: toProbe.length, filtered, healthy, deadLink, cached, errored });
+            continue;
+          }
+        }
+
+        // Field aggregation: every probed torrent's parsed release
+        // fields get counted against the outcome. Filtered (May-2026)
+        // and healthy contribute to the discovery signal. Dead-link
+        // is excluded — those correlate with a hoster CDN problem,
+        // not with release naming.
+        if (outcome === "filtered" || outcome === "healthy") {
+          const parsed = parseRelease(t.filename);
+          for (const [field, value] of Object.entries(parsed)) {
+            if (!value) continue;
+            const key = `${field}:${value}`;
+            if (!releaseAgg[key]) releaseAgg[key] = { f: 0, h: 0 };
+            if (outcome === "filtered") releaseAgg[key].f++;
+            else releaseAgg[key].h++;
+          }
+        }
+
+        // Per-row counter bookkeeping: each row increments EXACTLY
+        // ONE of {cached, filtered, healthy, deadLink, errored} so
+        // the running tally always equals i+1.
+        if (fromCache) {
+          cached++;
+        } else if (outcome === "filtered") {
+          filtered++;
+          filteredTorrents.push(t);
+        } else if (outcome === "dead-link") {
+          deadLink++;
+          deadLinkTorrents.push(t);
+        } else {
+          healthy++;
+          healthyTorrents.push(t);
+        }
+        onProgress({ i, total: toProbe.length, filtered, healthy, deadLink, cached, errored });
+      }
+    } finally {
+      _probeAbort = null;
+      // Final flushes on the way out — completion OR abort path.
+      flushCache();
+      saveReleaseAgg(releaseAgg);
+    }
+    return { probedNow, filtered, healthy, deadLink, cached, errored, filteredTorrents, healthyTorrents, deadLinkTorrents };
+  }
+
+  // ============================================================
+  // Discovery analysis: find (field, value) pairs strongly
+  // correlated with filtering. Only release-tag fields (group,
+  // source) are surfaced — title / resolution / audio carry no
+  // filter signal.
+  // ============================================================
+  const DISCOVERY_FIELDS = new Set(["group", "source"]);
+
+  // annotateCoOccurrence — for each candidate, list the OTHER
+  // (field, value) pairs that appear in *every* filtered torrent
+  // containing the candidate AND are themselves strongly filter-
+  // correlated. Without this filter the list floods with
+  // universally-common attributes (resolution:1080p, codec:h264)
+  // that co-occur trivially because most releases use them.
+  //
+  // Tightened to 90% ratio + 10-observation floor after seeing
+  // codec:h264 surface at 77% from a small probed subset — that's
+  // "h264 is popular", not "h264 is filtered". The stricter cutoff
+  // keeps the list to fields a curator would consider load-bearing.
+  const COOCCUR_MIN_RATIO = 0.90;
+  const COOCCUR_MIN_FILTERED = 10;
+  function annotateCoOccurrence(candidates, torrents) {
+    const cache = loadProbeCache();
+    const releaseAgg = loadReleaseAgg();
+    const filteredParsed = [];
+    for (const t of torrents) {
+      const v = cache[t.hash];
+      if (!v || v.outcome !== "filtered") continue;
+      filteredParsed.push(parseRelease(t.filename));
+    }
+    for (const c of candidates) {
+      const matches = filteredParsed.filter(p => p[c.field] === c.value);
+      if (matches.length === 0) { c.cooccurs = []; continue; }
+      const counts = {};
+      for (const p of matches) {
+        for (const [f, v] of Object.entries(p)) {
+          if (!v || f === c.field) continue;
+          const k = `${f}:${v}`;
+          counts[k] = (counts[k] || 0) + 1;
+        }
+      }
+      c.cooccurs = Object.entries(counts)
+        .filter(([, n]) => n === matches.length)
+        .map(([k]) => {
+          const agg = releaseAgg[k] || { f: 0, h: 0 };
+          const total = agg.f + agg.h;
+          const ratio = total > 0 ? agg.f / total : 0;
+          const value = k.slice(k.indexOf(":") + 1);
+          return { key: k, ratio, value, filtered: agg.f };
+        })
+        .filter(co => co.ratio >= COOCCUR_MIN_RATIO)
+        .filter(co => co.filtered >= COOCCUR_MIN_FILTERED)
+        // Skip values already covered by the baked-in regex —
+        // surfacing them as co-occurrence is redundant noise.
+        .filter(co => !bakedInRegexTokens.has(co.value))
+        .sort((a, b) => b.ratio - a.ratio);
+    }
+  }
+
+  function findDiscoveryCandidates(releaseAgg, minFiltered, minRatio) {
+    const out = [];
+    for (const [key, counts] of Object.entries(releaseAgg)) {
+      const colon = key.indexOf(":");
+      if (colon < 0) continue; // legacy bare-token entries: skip
+      const field = key.slice(0, colon);
+      const value = key.slice(colon + 1);
+      if (!DISCOVERY_FIELDS.has(field)) continue;
+      const total = counts.f + counts.h;
+      if (counts.f < minFiltered) continue;
+      const ratio = total > 0 ? counts.f / total : 0;
+      if (ratio < minRatio) continue;
+      if (bakedInRegexTokens.has(value)) continue;
+      out.push({ field, value, filtered: counts.f, healthy: counts.h, ratio });
+    }
+    out.sort((a, b) => b.filtered - a.filtered || b.ratio - a.ratio);
+    return out;
+  }
+
+  // _lastProbeResult — populated by the deep-clean handler after a
+  // successful probe run. Captured so the Reddit report can include
+  // the deep-clean breakdown (filtered + dead-link counts found via
+  // /unrestrict/link) even if the user clicks the report button
+  // after navigating around the page. Null until the first probe.
+  let _lastProbeResult = null;
+
+  const DISCOVERY_DISPLAY_LIMIT = 15;
+
+  function renderDiscovery(candidates) {
+    const ul = $("discovery-list");
+    ul.innerHTML = "";
+    if (candidates.length === 0) {
+      const li = document.createElement("li");
+      li.className = "muted small";
+      li.textContent = "No new pattern candidates from your library — the baked-in regex covered everything we saw.";
+      ul.appendChild(li);
+    } else {
+      const shown = candidates.slice(0, DISCOVERY_DISPLAY_LIMIT);
+      for (const c of shown) {
+        const li = document.createElement("li");
+        const label = `${window.litterbox.escapeHTML(c.field)}:${window.litterbox.escapeHTML(c.value)}`;
+        let html = `<code>${label}</code> — ` +
+          `<strong>${c.filtered}</strong> filtered, ${c.healthy} healthy ` +
+          `<span class="muted small">(${(c.ratio * 100).toFixed(1)}% filter-correlated)</span>`;
+        if (c.cooccurs && c.cooccurs.length > 0) {
+          const co = c.cooccurs
+            .map(o => `<code>${window.litterbox.escapeHTML(o.key)}</code> (${(o.ratio * 100).toFixed(0)}%, ${o.filtered} filtered)`)
+            .join(", ");
+          html += `<br><span class="muted small">always co-occurs with: ${co}</span>`;
+        }
+        li.innerHTML = html;
+        ul.appendChild(li);
+      }
+      if (candidates.length > DISCOVERY_DISPLAY_LIMIT) {
+        const li = document.createElement("li");
+        li.className = "muted small";
+        li.textContent = `…and ${candidates.length - DISCOVERY_DISPLAY_LIMIT} more weaker correlations (not shown).`;
+        ul.appendChild(li);
+      }
+    }
+    show("step-discovery");
+  }
+
+  // pickRandom — uniform random pick from an array. Used by the
+  // share-card + Reddit-report builders so repeat scans don't render
+  // identical copy.
+  function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  // Reddit-report headlines — the lede that hooks engagement. Lead
+  // with the % rotted + total library size (the social proof) and
+  // the "(that RD broke)" attribution that puts the blame where it
+  // belongs. Variants pick different phrasings so a megathread full
+  // of these posts doesn't read as obvious template output.
+  //
+  // ctx fields: { total, brokenBytes, libraryBytes, pct, stink }
+  const REDDIT_HEADLINES = [
+    (c) => `**LitterBox cleaned ${c.pct}% of my ${c.libraryBytes} Real-Debrid library (that RD broke)**`,
+    (c) => `**${c.pct}% of my ${c.libraryBytes} Real-Debrid library was broken. LitterBox scooped it.**`,
+    (c) => `**Real-Debrid broke ${c.brokenBytes} of my ${c.libraryBytes} library (${c.pct}%). LitterBox cleaned it up.**`,
+    (c) => `**LitterBox audit of my ${c.libraryBytes} Real-Debrid library: ${c.brokenBytes} broken (${c.pct}%)**`,
+    (c) => `**Found ${c.brokenBytes} of dead weight in my ${c.libraryBytes} Real-Debrid library — ${c.pct}% gone, LitterBox cleaned the rest up**`,
+    (c) => `**My Real-Debrid library was ${c.pct}% rot (${c.brokenBytes} of ${c.libraryBytes}). LitterBox scooped it.**`,
+  ];
+
+  // buildRedditReport returns the markdown the user pastes into the
+  // community megathread comment box.
+  function buildRedditReport(stats, stink, probeResult, candidates) {
+    const filteredViaRegex = stats.brokenByStatus[FILTERED_STATUS_KEY] || 0;
+    const probeFiltered = (probeResult && probeResult.filtered) || 0;
+    const probeDeadLink = (probeResult && probeResult.deadLink) || 0;
+    const adminBroken = (stats.brokenByStatus.error || 0)
+      + (stats.brokenByStatus.virus || 0)
+      + (stats.brokenByStatus.dead || 0)
+      + (stats.brokenByStatus.magnet_error || 0);
+    const totalScooped = stats.broken + probeFiltered + probeDeadLink;
+
+    // Projected after-state: assume everything broken got cleaned.
+    // Same arithmetic as the before/after section so the headline
+    // numbers line up.
+    const remainingLibBytes = Math.max(0, stats.libraryBytes - stats.brokenBytes);
+    const afterStink = stinkRating(0, remainingLibBytes);
+
+    // Inline-comma breakdown — one line vs a 5-row table. Plain-
+    // language labels — no "(regex)" / "(hoster_unavailable)" /
+    // "/unrestrict probe" jargon. Average Redditor needs to read
+    // these and grok them at a glance.
+    const parts = [];
+    if (filteredViaRegex > 0) parts.push(`${filteredViaRegex} caught by filename pattern`);
+    if (probeFiltered > 0)    parts.push(`${probeFiltered} more caught by per-torrent probe`);
+    if (probeDeadLink > 0)    parts.push(`${probeDeadLink} dead-link errors`);
+    if (adminBroken > 0)      parts.push(`${adminBroken} flagged broken by RD`);
+    const breakdown = parts.join(" · ");
+
+    const headline = pickRandom(REDDIT_HEADLINES)({
+      total: totalScooped,
+      brokenBytes: fmtBytesRounded(stats.brokenBytes),
+      libraryBytes: fmtBytesRounded(stats.libraryBytes),
+      pct: stink.pct.toFixed(1),
+      stink,
+    });
+    const lines = [
+      headline,
+      "",
+      `Stink rating: **${stink.label} (${stink.score}/10)** → **${afterStink.label} (${afterStink.score}/10)** ✨`,
+      "",
+      `**Breakdown:** ${breakdown}`,
+      "",
+    ];
+
+    if (candidates && candidates.length > 0) {
+      const shown = candidates.slice(0, DISCOVERY_DISPLAY_LIMIT);
+      // Drop the "Co-occurs with" column when no candidate has any
+      // co-occurrence data — saves explaining what "co-occurs" means
+      // for the common case where the column would just be "—" rows.
+      const hasCooccurs = shown.some(c => c.cooccurs && c.cooccurs.length > 0);
+
+      lines.push("**Tags not yet in LitterBox's built-in filter list, found in 100%-filtered torrents in my library:**");
+      lines.push("");
+      if (hasCooccurs) {
+        lines.push("| Field | Value | Filtered | Healthy | % filtered | Co-occurs with |");
+        lines.push("|---|---|---:|---:|---:|---|");
+      } else {
+        lines.push("| Field | Value | Filtered | Healthy | % filtered |");
+        lines.push("|---|---|---:|---:|---:|");
+      }
+      for (const c of shown) {
+        const baseRow = `| \`${c.field}\` | \`${c.value}\` | ${c.filtered} | ${c.healthy} | ${(c.ratio * 100).toFixed(1)}% |`;
+        if (hasCooccurs) {
+          const co = (c.cooccurs && c.cooccurs.length > 0)
+            ? c.cooccurs.map(o => `\`${o.key}\` (${(o.ratio * 100).toFixed(0)}%, ${o.filtered} filtered)`).join(", ")
+            : "—";
+          lines.push(`${baseRow} ${co} |`);
+        } else {
+          lines.push(baseRow);
+        }
+      }
+      if (candidates.length > DISCOVERY_DISPLAY_LIMIT) {
+        const fill = hasCooccurs ? " | | | | | |" : " | | | | |";
+        lines.push(`| _…and ${candidates.length - DISCOVERY_DISPLAY_LIMIT} more_${fill}`);
+      }
+      lines.push("");
+    }
+
+    lines.push("---");
+    lines.push("");
+    lines.push("Tool: [LitterBox](https://litterbox.elfhosted.com) — open-source, runs in-browser, signs in with your RD account.");
+    lines.push("");
+    lines.push("Migrating from Real-Debrid to TorBox with the catalog intact: [ElfHosted's CatBox personal media stacks](https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=reddit&utm_campaign=rd-migration) — API and policy compliant, TorBox-endorsed.");
+
+    return lines.join("\n");
+  }
+
+  // downloadBackup serializes the broken-set as a JSON file the
+  // browser downloads. Format is DMM-compatible by design: DMM's
+  // localRestore (src/utils/localRestore.ts) reads a bare JSON array
+  // and consumes only `.hash` from each row — anything else is
+  // silently tolerated. We keep `filename` alongside (a) for human-
+  // readable inspection in a text editor and (b) because DMM's own
+  // export emits it too.
+  //
+  // The .dmm.json suffix is DMM's convention; we adopt it so a user
+  // dragging the file into DMM's import picker has the file-type
+  // hint pre-applied. Restore picker accepts any .json so we're not
+  // gating compatibility on the extension — just helping discovery.
+  function downloadBackup(toDelete) {
+    const arr = toDelete.map(t => ({
+      filename: t.filename,
+      hash: t.hash,
+    }));
+    const blob = new Blob([JSON.stringify(arr, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `backup-litterbox-${Date.now()}.dmm.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ----------- Bytes formatting -----------
+  //
+  // Human-readable size with two-decimal precision. Base-1024 to
+  // match what most users see in clients (GiB labelled as GB is the
+  // common-but-wrong convention; we follow it).
+  function fmtBytes(n) {
+    if (!Number.isFinite(n) || n <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+    let i = 0;
+    while (n >= 1024 && i < units.length - 1) {
+      n /= 1024; i++;
+    }
+    return `${n.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
+  }
+
+  // Round-up variant for headline use. The social-proof lede reads
+  // punchier with "20 TB" than "18.93 TB" — exact precision belongs
+  // on the stat cards, not in the headline.
+  function fmtBytesRounded(n) {
+    if (!Number.isFinite(n) || n <= 0) return "0 B";
+    const TB = 1024 ** 4, GB = 1024 ** 3;
+    if (n >= TB) return `${Math.ceil(n / TB)} TB`;
+    if (n >= GB) return `${Math.ceil(n / GB)} GB`;
+    return fmtBytes(n);
+  }
+
+  // ----------- Scan -----------
+
+  async function scanLibrary(onProgress) {
+    const all = [];
+    let page = 1;
+    while (true) {
+      const r = await window.litterbox.proxiedFetch(
+        `/rest/1.0/torrents?limit=100&page=${page}`
+      );
+      if (r.status === 401 || r.status === 403) {
+        localStorage.clear();
+        window.location.href = "/";
+        return all;
+      }
+      if (r.status === 204) break;
+      if (!r.ok) throw new Error(`scan page ${page}: ${r.status}`);
+      const batch = await r.json();
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      all.push(...batch);
+      onProgress(all.length);
+      if (batch.length < 100) break;
+      page++;
+    }
+    return all;
+  }
+
+  function buildStats(torrents) {
+    const stats = {
+      total: torrents.length,
+      healthy: 0,
+      broken: 0,
+      libraryBytes: 0,
+      brokenBytes: 0,
+      brokenByStatus: {},
+      // filteredOnly is a subset of broken — torrents that only show
+      // up via the filename regex (not via RD's status field). Used
+      // in copy ("X of these are filtered, not just broken") to
+      // distinguish the May 2026 class from the older RD-admitted
+      // failure modes.
+      filteredOnly: 0,
+    };
+    for (const t of torrents) {
+      const bytes = Number(t.bytes) || 0;
+      stats.libraryBytes += bytes;
+      const kind = classifyStatus(t);
+      if (kind === null) {
+        stats.healthy++;
+        continue;
+      }
+      stats.broken++;
+      stats.brokenBytes += bytes;
+      stats.brokenByStatus[kind] = (stats.brokenByStatus[kind] || 0) + 1;
+      if (kind === FILTERED_STATUS_KEY) stats.filteredOnly++;
+    }
+    return stats;
+  }
+
+  function topBrokenStatus(byStatus) {
+    let top = null;
+    let topN = 0;
+    for (const [k, v] of Object.entries(byStatus)) {
+      if (v > topN) { top = k; topN = v; }
+    }
+    // labelFor handles both the four real RD statuses (via
+    // BROKEN_STATUSES) AND the synthesized "filtered" key — direct
+    // BROKEN_STATUSES[top] lookups would miss the synthesized one
+    // and render its bare internal key instead of the friendly
+    // label. `short: true` keeps the worst-offender stat-card from
+    // overflowing on the synthesized status's long descriptor.
+    return top ? { label: labelFor(top, { short: true }), count: topN } : null;
+  }
+
+  // ----------- Stink rating -----------
+  //
+  // Score 0-10 driven by broken-bytes-as-fraction-of-library. Bytes
+  // rather than counts because a single 50GB rotted release is more
+  // impactful than a hundred 10MB ones — though both are wasted
+  // catalog rows from the user's POV, the bytes story is more
+  // visceral and gets the headline. Bands deliberately overlap a bit
+  // so the labels feel earned rather than mechanical.
+  function stinkRating(brokenBytes, libraryBytes) {
+    const pct = libraryBytes > 0 ? (brokenBytes * 100 / libraryBytes) : 0;
+    let rating;
+    if (pct < 1)        rating = { score: 0, label: "🌸 Daisy fresh",     tone: "ok" };
+    else if (pct < 5)   rating = { score: 1, label: "🍃 Barely a whiff",  tone: "ok" };
+    else if (pct < 15)  rating = { score: 3, label: "🌿 Mildly musty",    tone: "warn" };
+    else if (pct < 30)  rating = { score: 5, label: "🧦 Smelly socks",    tone: "warn" };
+    else if (pct < 50)  rating = { score: 7, label: "🦨 Skunky",          tone: "danger" };
+    else if (pct < 75)  rating = { score: 9, label: "🚛 Garbage truck",   tone: "danger" };
+    else                rating = { score: 10, label: "☣️ Biohazard",      tone: "danger" };
+    rating.pct = pct;
+    return rating;
+  }
+
+  // ----------- Pie chart (conic-gradient) -----------
+  //
+  // No library — a single conic-gradient CSS background, computed
+  // from per-status percentages. Healthy first (largest slice, green),
+  // broken statuses next in fixed colour order. Legend renders below
+  // with swatch + count + percent so the pie isn't load-bearing for
+  // accessibility — a screen reader gets the same data from the list.
+
+  // Map status → (swatch colour, friendly label). Order matters for
+  // pie layout — healthy first so its green dominates the natural
+  // "top-of-circle" position, then the filtered (May 2026) class,
+  // then the older RD-admitted broken statuses, then in-flight.
+  const STATUS_COLORS = [
+    { key: "healthy",                 label: "😺 healthy",          color: "#67d391" },
+    { key: FILTERED_STATUS_KEY,       label: FILTERED_STATUS_LABEL, color: "#b45cff" },
+    { key: "error",                   label: BROKEN_STATUSES.error,        color: "#ff6b6b" },
+    { key: "dead",                    label: BROKEN_STATUSES.dead,         color: "#8b3a3a" },
+    { key: "virus",                   label: BROKEN_STATUSES.virus,        color: "#ffb347" },
+    { key: "magnet_error",            label: BROKEN_STATUSES.magnet_error, color: "#d97e7e" },
+    { key: "downloading",             label: "⏳ downloading",      color: "#7aa6ff" },
+    { key: "queued",                  label: "📋 queued",           color: "#9aa3b5" },
+    { key: "other",                   label: "❓ other",            color: "#5a6178" },
+  ];
+
+  // groupForPie folds each torrent into the bins STATUS_COLORS knows
+  // about. Synthesized "filtered" (filename-regex hit) overrides the
+  // real status only when the real status is one of the "healthy-
+  // looking" ones — never overrides a real RD-admitted broken status
+  // (those are the most-explicit signal and we want to surface them
+  // distinctly).
+  function groupForPie(torrents) {
+    const counts = {};
+    for (const t of torrents) {
+      let bin;
+      if (BROKEN_STATUSES.hasOwnProperty(t.status)) {
+        bin = t.status;
+      } else if (RD_BLOCKED_FILENAME_REGEX.test(t.filename || "")) {
+        bin = FILTERED_STATUS_KEY;
+      } else if (t.status === "downloaded" || t.status === "compressing" || t.status === "uploading") {
+        bin = "healthy";
+      } else if (t.status === "downloading") {
+        bin = "downloading";
+      } else if (t.status === "queued" || t.status === "waiting_files_selection" || t.status === "magnet_conversion") {
+        bin = "queued";
+      } else {
+        bin = "other";
+      }
+      counts[bin] = (counts[bin] || 0) + 1;
+    }
+    return counts;
+  }
+
+  function renderPie(torrents) {
+    const counts = groupForPie(torrents);
+    const total = torrents.length || 1;
+    const stops = [];
+    const legend = [];
+    let cumulative = 0;
+    for (const spec of STATUS_COLORS) {
+      const n = counts[spec.key] || 0;
+      if (n === 0) continue;
+      const pct = (n * 100) / total;
+      const next = cumulative + pct;
+      stops.push(`${spec.color} ${cumulative.toFixed(2)}% ${next.toFixed(2)}%`);
+      legend.push({ spec, n, pct });
+      cumulative = next;
+    }
+    // Defensive — if no segments at all, paint a neutral disc.
+    const gradient = stops.length > 0
+      ? `conic-gradient(${stops.join(", ")})`
+      : "conic-gradient(var(--muted) 0% 100%)";
+    $("pie").style.background = gradient;
+
+    const ul = $("pie-legend");
+    ul.innerHTML = "";
+    for (const item of legend) {
+      const li = document.createElement("li");
+      const sw = document.createElement("span");
+      sw.className = "swatch";
+      sw.style.background = item.spec.color;
+      const text = document.createElement("span");
+      text.textContent = `${item.spec.label}: ${item.n} (${item.pct.toFixed(1)}%)`;
+      li.appendChild(sw);
+      li.appendChild(text);
+      ul.appendChild(li);
+    }
+  }
+
+  // ----------- Share copy -----------
+  //
+  // Three tones × 7 variations each. Variables filled per-render;
+  // messages stay readable both raw (in copy-paste) and when posted
+  // to a social feed. When a non-trivial share of the broken set came
+  // from the May 2026 filename-regex pass (filteredOnly > 0), some
+  // variants surface that framing — it's the story most users will
+  // be discovering for the first time. Vocabulary borrowed from
+  // verbatim X posts (infringing_file, WEB-DL is cooked, rug-pull,
+  // working Monday broken now, etc.).
+  const SHARE_VENT = [
+    (s, st, bw, fl) => `${s.broken} broken/filtered torrents (${bw}, ${st.pct.toFixed(1)}% of my library) just got scooped out of my @realdebrid library${fl}.\n\n` +
+      `Stink rating: ${st.label} (${st.score}/10) 🦨\n\n` +
+      `Cleaned with LitterBox: https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `Took the trash out of my @realdebrid library: ${s.broken} broken/filtered torrents gone (${bw})${fl}.\n\n` +
+      `Stink rating: ${st.label} ${st.score}/10 → daisy-fresh ✨\n\n` +
+      `🐈‍⬛ https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `My @realdebrid library was ${st.pct.toFixed(1)}% rot by weight — ${s.broken} broken/filtered items, ${bw} of dead catalog${fl}.\n\n` +
+      `LitterBox scooped them in one click: https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `${st.label} (${st.score}/10) — that's what my @realdebrid library scored before LitterBox scooped out ${s.broken} broken/filtered torrents${fl}.\n\n` +
+      `https://litterbox.elfhosted.com 🐈‍⬛`,
+    (s, st, bw, fl) => `infringing_file errors everywhere in my @realdebrid library — LitterBox just cleaned out ${s.broken} of them (${bw}, ${st.pct.toFixed(1)}% of my catalog)${fl}.\n\n` +
+      `https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `Working Monday, broken now: ${s.broken} torrents in my @realdebrid library scooped by LitterBox${fl}.\n\n` +
+      `Stink rating: ${st.label} (${st.score}/10)\nhttps://litterbox.elfhosted.com 🐈‍⬛`,
+    (s, st, bw, fl) => `Post-rug-pull cleanup: ${s.broken} dead/filtered torrents (${bw}) out of my @realdebrid library${fl}.\n\n` +
+      `${st.label} ${st.score}/10 → 🌸 clean.\nhttps://litterbox.elfhosted.com`,
+  ];
+  const SHARE_TOOL = [
+    (s, st, bw, fl) => `🐈‍⬛ Just used LitterBox to scoop ${s.broken} broken / filtered torrents out of my Real-Debrid library in one click. ` +
+      `Free, open-source, OAuth sign-in (no API key entry), browser-only token storage, detects the May 2026 "infringing_file" class.\n\n` +
+      `https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `LitterBox 🐈‍⬛ — spring-cleaned my Real-Debrid library in one click. ${s.broken} broken/filtered items scooped (${bw}). ` +
+      `Free, OSS, OAuth sign-in, token stays in your browser, detects the May 2026 filter class that RD's UI hides.\n\n` +
+      `https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `If your Real-Debrid library is full of infringing_file errors, try LitterBox 🐈‍⬛ — OAuth sign-in, no API key, no server-side storage. ` +
+      `Caught ${s.broken} broken/filtered torrents in mine.\n\n` +
+      `https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `RD's official UI won't show you which torrents got hit by the May 2026 filter. LitterBox does — pulled ${s.broken} broken/filtered ones out of my library just now. ` +
+      `Free, OSS, browser-only auth.\n\n` +
+      `https://litterbox.elfhosted.com 🐈‍⬛`,
+    (s, st, bw, fl) => `Spring-cleaning my Real-Debrid library after the May 2026 rug-pull. ${s.broken} dead/filtered torrents scooped with LitterBox 🐈‍⬛ — free, open-source, no API key entry. ` +
+      `Your token never leaves your browser.\n\n` +
+      `https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `Found LitterBox 🐈‍⬛ — OAuth into Real-Debrid, one click, bulk-deletes the broken/filtered debris. Just cleared ${s.broken} items (${bw}) out of my library. ` +
+      `OSS, browser-only auth.\n\n` +
+      `https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `Real-Debrid library checkup with LitterBox 🐈‍⬛: ${s.broken} broken/filtered → scooped, ${st.label} → daisy-fresh. ` +
+      `Browser-only OAuth, no API key, no server-side data, fully open-source.\n\n` +
+      `https://litterbox.elfhosted.com`,
+  ];
+  const SHARE_ELFHOSTED = [
+    (s, st, bw, fl) => `My @realdebrid library had ${s.broken} broken torrents${fl}. Scooped with LitterBox 🧹\n\n` +
+      `Looking into @elfhosted's CatBox personal media stacks to migrate from Real-Debrid to TorBox — keeps the library intact, TorBox-endorsed, no more RD filter drama.\n` +
+      `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
+    (s, st, bw, fl) => `Just scooped ${s.broken} broken torrents out of my @realdebrid library with LitterBox 🐈‍⬛\n\n` +
+      `Next step: migrating from Real-Debrid to TorBox via @elfhosted's CatBox personal media stacks — API and policy compliant, TorBox-endorsed, library transitions across instead of getting binned.\n` +
+      `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
+    (s, st, bw, fl) => `LitterBox caught ${s.broken} broken/filtered items in my @realdebrid library${fl}. ` +
+      `Cleanup is the band-aid; @elfhosted's CatBox personal media stacks are the structural answer — migrate from Real-Debrid to TorBox with the library intact.\n` +
+      `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
+    (s, st, bw, fl) => `${s.broken} broken/filtered torrents (${bw}) gone from my @realdebrid library, courtesy of LitterBox. ` +
+      `But the rug-pulls keep coming — looking at @elfhosted's CatBox personal media stacks to migrate from Real-Debrid to TorBox without losing what still works.\n` +
+      `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
+    (s, st, bw, fl) => `WEB-DL is cooked on @realdebrid. LitterBox scooped ${s.broken} broken/filtered torrents from my library; ` +
+      `@elfhosted's CatBox personal media stacks can migrate the survivors from Real-Debrid to TorBox — API and policy compliant, TorBox-endorsed. Same Sonarr/Radarr setup.\n` +
+      `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
+    (s, st, bw, fl) => `Real-Debrid library tanked ${st.pct.toFixed(1)}% by weight — ${s.broken} torrents binned with LitterBox 🐈‍⬛. ` +
+      `Migrating from Real-Debrid to TorBox via @elfhosted's CatBox personal media stacks to stop bleeding catalog (library transitions across; TorBox-endorsed).\n` +
+      `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
+    (s, st, bw, fl) => `Cleaned ${s.broken} broken/filtered items out of my @realdebrid library with LitterBox today${fl}. ` +
+      `Seriously considering @elfhosted's CatBox personal media stacks — migrate from Real-Debrid to TorBox, library intact, no more wondering what'll vanish next.\n` +
+      `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
+  ];
+
+  // _shareCtx — captured after each scan so the 🎲 Reroll buttons can
+  // pick fresh templates against the same numbers without rescanning.
+  let _shareCtx = null;
+  const SHARE_POOLS = {
+    "share-shame": SHARE_VENT,
+    "share-tool": SHARE_TOOL,
+    "share-elfhosted": SHARE_ELFHOSTED,
+  };
+
+  function renderShareCopy(stats, stink) {
+    const brokenWeight = fmtBytes(stats.brokenBytes);
+    const filteredLine = stats.filteredOnly > 0
+      ? ` (${stats.filteredOnly} are 🚫 infringing_file — RD's UI shows them as healthy)`
+      : "";
+    _shareCtx = { stats, stink, brokenWeight, filteredLine };
+
+    $("share-shame").textContent = pickRandom(SHARE_VENT)(stats, stink, brokenWeight, filteredLine);
+    $("share-tool").textContent = pickRandom(SHARE_TOOL)(stats, stink, brokenWeight, filteredLine);
+    $("share-elfhosted").textContent = pickRandom(SHARE_ELFHOSTED)(stats, stink, brokenWeight, filteredLine);
+  }
+
+  function rerollShare(slotId) {
+    if (!_shareCtx) return;
+    const pool = SHARE_POOLS[slotId];
+    if (!pool) return;
+    const { stats, stink, brokenWeight, filteredLine } = _shareCtx;
+    // Pick a *different* template than the one currently rendered when
+    // possible — uniform random with N=7 has a 1-in-7 chance of redrawing
+    // the same line, which the user perceives as "the button broke".
+    const current = $(slotId).textContent;
+    let next = pickRandom(pool)(stats, stink, brokenWeight, filteredLine);
+    for (let i = 0; i < 5 && next === current; i++) {
+      next = pickRandom(pool)(stats, stink, brokenWeight, filteredLine);
+    }
+    $(slotId).textContent = next;
+  }
+
+  // Share-button delegation: every button with data-share-copy /
+  // data-share-tweet / data-share-reroll finds the matching share-
+  // text element by id and acts on it.
+  document.addEventListener("click", async (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+    const copyId = t.dataset.shareCopy;
+    const tweetId = t.dataset.shareTweet;
+    const rerollId = t.dataset.shareReroll;
+    if (rerollId) {
+      rerollShare(rerollId);
+      const orig = t.textContent;
+      t.textContent = "🎲 …";
+      setTimeout(() => { t.textContent = orig; }, 400);
+      return;
+    }
+    if (copyId) {
+      const text = $(copyId).textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        const orig = t.textContent;
+        t.textContent = "✓ copied";
+        setTimeout(() => { t.textContent = orig; }, 1200);
+      } catch (err) {
+        alert("Copy failed — your browser blocked clipboard access.");
+      }
+    } else if (tweetId) {
+      const text = $(tweetId).textContent;
+      const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  });
+
+  // ----------- Scan flow -----------
+
+  let _brokenIds = [];     // ACTIVE delete set — repointed by Quick wipe / Deep clean buttons
+  let _quickWipeIds = [];  // captured at scan time, never mutated post-scan
+  let _beforeStats = null; // snapshot for the before/after comparison
+
+  async function runScan() {
+    show("loading");
+    hide("results");
+    hide("done");
+    $("scan-detail").textContent = "first batch incoming…";
+    const all = await scanLibrary((total) => {
+      $("scan-detail").textContent = `${total} torrents inspected`;
+      const bar = $("scan-progress");
+      bar.value = Math.min(90, parseFloat(bar.value || 0) + 1);
+    });
+    $("scan-progress").value = 100;
+
+    const stats = buildStats(all);
+    _quickWipeIds = all.filter(isBroken).map(t => t.id);
+    _brokenIds = _quickWipeIds.slice(); // Quick wipe is the default active set
+    _allTorrents = all;
+    _beforeStats = stats;
+
+    $("count-total").textContent = stats.total;
+    $("count-healthy").textContent = stats.healthy;
+    $("count-broken").textContent = stats.broken;
+
+    // Headline stink rating.
+    const stink = stinkRating(stats.brokenBytes, stats.libraryBytes);
+    $("stink-rating").textContent = `${stink.label} (${stink.score}/10)`;
+    $("stink-rating").className = `stink-rating stink-${stink.tone}`;
+    $("stink-detail").textContent = stats.broken === 0
+      ? "🎉 nothing rotting in here today."
+      : `${stats.broken} broken / filtered torrents — ${stink.pct.toFixed(1)}% of your library by size`;
+
+    // Pie + legend.
+    renderPie(all);
+
+    // Numeric stat cards.
+    $("stat-library-size").textContent = fmtBytes(stats.libraryBytes);
+    $("stat-broken-size").textContent = fmtBytes(stats.brokenBytes);
+    $("stat-broken-pct").textContent =
+      `dead weight (${stink.pct.toFixed(1)}% of library)`;
+    const top = topBrokenStatus(stats.brokenByStatus);
+    $("stat-top-status").textContent = top ? top.label : "—";
+
+    // Filtered-class callout — only render when the May 2026 regex
+    // matched something. Tells the user "this is the rug-pull, not
+    // the same-old broken statuses" so they understand what the tool
+    // just caught.
+    const calloutEl = $("filtered-callout");
+    if (calloutEl) {
+      if (stats.filteredOnly > 0) {
+        $("filtered-callout-count").textContent = stats.filteredOnly;
+        show("filtered-callout");
+      } else {
+        hide("filtered-callout");
+      }
+    }
+
+    // Step 1 — Quick wipe block: shown whenever the fast pass found
+    // ANY broken (incl. regex-flagged) torrents. Button label
+    // includes the count for instant clarity.
+    if (stats.broken === 0) {
+      hide("step-quickwipe");
+    } else {
+      show("step-quickwipe");
+      $("quickwipe-count").textContent = stats.broken;
+      $("delete-button").textContent = `🗑️ Quick wipe (${stats.broken})`;
+    }
+
+    // Step 2 — Deep clean block: shown whenever there are healthy-
+    // looking torrents to probe. Population is "every torrent the
+    // fast pass didn't already flag". ETA uses 250ms per probe at
+    // the rate-limit ceiling.
+    const probeCandidates = all.filter(t => !isBroken(t) && t.links && t.links.length > 0);
+    if (probeCandidates.length === 0) {
+      hide("step-deepclean");
+    } else {
+      show("step-deepclean");
+      $("deepclean-count").textContent = probeCandidates.length;
+      const etaSec = Math.ceil(probeCandidates.length * 0.25);
+      const etaStr = etaSec >= 60
+        ? `~${Math.ceil(etaSec / 60)} min`
+        : `~${etaSec}s`;
+      $("deepclean-eta").textContent = etaStr;
+    }
+    // Stash for the click handler.
+    _probeCandidates = probeCandidates;
+
+    // "All clean" only renders when nothing is actionable — neither
+    // step has work to do.
+    if (stats.broken === 0 && probeCandidates.length === 0) {
+      show("all-clean");
+    } else {
+      hide("all-clean");
+    }
+
+    // Rebuild releaseAgg from the existing probe cache if a prior
+    // deep clean already ran but the new field-keyed aggregates
+    // are empty (upgrade path from the old bare-token format). The
+    // probe cache holds per-hash verdicts; we re-parse each
+    // filename to populate field-keyed counts. One-shot — once
+    // populated, future probes append directly.
+    maybeRebuildAggregates(all);
+
+    const candidates = findDiscoveryCandidates(loadReleaseAgg(), 5, 0.9);
+    annotateCoOccurrence(candidates, all);
+    renderDiscovery(candidates);
+
+    renderShareCopy(stats, stink);
+
+    hide("loading");
+    show("results");
+  }
+
+  // Probe candidates captured at scan time so the Step 2 button
+  // doesn't have to recompute from _allTorrents.
+  let _probeCandidates = [];
+
+  // ============================================================
+  // Step 2: Deep clean click handler.
+  // ============================================================
+  $("deepclean-button").addEventListener("click", async () => {
+    hide("deepclean-actions");
+    show("deepclean-progress");
+    hide("deepclean-result");
+    const bar = $("deepclean-bar");
+    const detail = $("deepclean-detail");
+    bar.max = _probeCandidates.length;
+    bar.value = 0;
+
+    let result;
+    try {
+      result = await runDeepProbe(_probeCandidates, ({ i, total, filtered, healthy, deadLink, cached, errored, retry }) => {
+        bar.value = i + 1;
+        const base = `${i + 1} / ${total} — ` +
+          `${filtered} filtered · ${deadLink} dead-link · ${healthy} healthy · ${cached} cached · ${errored} errored`;
+        if (retry) {
+          // Surface mid-retry backoff so a 60s 429 wait reads as
+          // "waiting on rate-limit" rather than "frozen UI".
+          const seconds = Math.round(retry.backoffMs / 1000);
+          const reason = retry.reason === "rate-limit"
+            ? "Real-Debrid rate-limited us"
+            : retry.reason === "5xx"
+              ? "Real-Debrid returned 5xx"
+              : "network hiccup";
+          detail.textContent = `${base} — ⏸ ${reason}, backing off ${seconds}s (attempt ${retry.attempt + 1}/7)`;
+        } else {
+          detail.textContent = base;
+        }
+      });
+    } catch (e) {
+      if (e.name !== "AbortError") {
+        detail.innerHTML = `<span class="warn">probe failed:</span> ${window.litterbox.escapeHTML(e.message)}`;
+        return;
+      }
+      // Aborted path: still treat partial results below.
+      detail.textContent = "probe aborted — using partial results";
+    }
+
+    hide("deepclean-progress");
+
+    // Capture the result for downstream consumers (Reddit report,
+    // discovery rerun). On abort `result` is null — leave the
+    // previous value in place rather than wiping a successful
+    // earlier run.
+    if (result) _lastProbeResult = result;
+
+    // Even on abort, runDeepProbe persisted everything it had time
+    // to record. Pull the cache + recompute. The scoop set
+    // intentionally includes BOTH filtered (May 2026 class) AND
+    // dead-link (hoster_unavailable) outcomes — both mean "this
+    // torrent doesn't work" from the user's POV, and the user can
+    // un-tick rows on the confirm screen if they want to keep
+    // dead-link entries around in hope the hoster recovers.
+    const cache = loadProbeCache();
+    const catchHashes = new Set(
+      Object.entries(cache)
+        .filter(([, v]) => v.outcome === "filtered" || v.outcome === "dead-link")
+        .map(([k]) => k)
+    );
+    _deepCatchIds = _probeCandidates
+      .filter(t => catchHashes.has(t.hash))
+      .map(t => t.id);
+
+    const summary = result
+      ? `Deep probe complete — ${result.filtered} May-2026 filtered + ${result.deadLink} dead-link torrents found ` +
+        `(${result.cached} cached from a prior probe, ${result.errored} errored).`
+      : `Deep probe aborted — ${_deepCatchIds.length} broken torrents identified so far.`;
+    $("deepclean-result-summary").textContent = summary;
+
+    if (_deepCatchIds.length > 0) {
+      show("deepclean-scoop-row");
+      $("deepclean-scoop-button").textContent = `🗑️ Scoop deep-clean catches (${_deepCatchIds.length})`;
+    } else {
+      hide("deepclean-scoop-row");
+    }
+    show("deepclean-result");
+
+    // Discovery analysis: re-run against the newly-aggregated fields.
+    const candidates = findDiscoveryCandidates(loadReleaseAgg(), 5, 0.9);
+    annotateCoOccurrence(candidates, _allTorrents);
+    renderDiscovery(candidates);
+  });
+
+  $("deepclean-abort").addEventListener("click", () => {
+    if (_probeAbort) _probeAbort.abort();
+  });
+
+  $("deepclean-scoop-button").addEventListener("click", () => {
+    _activeScoopMode = "deepclean";
+    // Re-use the existing confirm flow by repointing _brokenIds to
+    // the deep-catch set, then triggering the same path the quick-
+    // wipe button does.
+    _brokenIds = _deepCatchIds.slice();
+    $("confirm-count").textContent = _brokenIds.length;
+    hide("results");
+    show("confirm");
+    $("confirm-input").value = "";
+    $("confirm-button").disabled = true;
+    if (isDryRun()) show("confirm-dry-banner"); else hide("confirm-dry-banner");
+    $("confirm-input").focus();
+  });
+
+  // ============================================================
+  // Discovery copy-to-clipboard buttons.
+  //   - "📋 Copy report"     — clipboard only.
+  //   - "🚀 Post to Reddit"  — copies AND opens the megathread.
+  // ============================================================
+
+  function buildCurrentReport() {
+    const stats = _beforeStats;
+    if (!stats) return null;
+    const stink = stinkRating(stats.brokenBytes, stats.libraryBytes);
+    const candidates = findDiscoveryCandidates(loadReleaseAgg(), 5, 0.9);
+    annotateCoOccurrence(candidates, _allTorrents);
+    return buildRedditReport(stats, stink, _lastProbeResult, candidates);
+  }
+
+
+  $("discovery-copy").addEventListener("click", async () => {
+    const report = buildCurrentReport();
+    if (!report) return;
+    try {
+      await navigator.clipboard.writeText(report);
+      const btn = $("discovery-copy");
+      const orig = btn.textContent;
+      btn.textContent = "✓ copied — paste anywhere";
+      setTimeout(() => { btn.textContent = orig; }, 2500);
+    } catch (err) {
+      alert("Copy failed — your browser blocked clipboard access.");
+    }
+  });
+
+  $("discovery-reddit").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const report = buildCurrentReport();
+    if (!report) return;
+    try { await navigator.clipboard.writeText(report); } catch {}
+    window.open(REDDIT_MEGATHREAD_URL, "_blank", "noopener,noreferrer");
+  });
+
+  // ----------- Delete flow -----------
+
+  $("delete-button").addEventListener("click", () => {
+    _activeScoopMode = "quickwipe";
+    _brokenIds = _quickWipeIds.slice();
+    $("confirm-count").textContent = _brokenIds.length;
+    hide("results");
+    show("confirm");
+    $("confirm-input").value = "";
+    $("confirm-button").disabled = true;
+    if (isDryRun()) show("confirm-dry-banner"); else hide("confirm-dry-banner");
+    $("confirm-input").focus();
+  });
+
+  $("confirm-input").addEventListener("input", (e) => {
+    $("confirm-button").disabled = e.target.value.trim().toLowerCase() !== "delete";
+  });
+
+  $("cancel-button").addEventListener("click", () => {
+    hide("confirm");
+    show("results");
+  });
+
+  $("confirm-button").addEventListener("click", async () => {
+    hide("confirm");
+
+    // Backup first, if the user wants one. JSON download fires
+    // synchronously before any DELETE call so a crash mid-loop
+    // doesn't strand the user without a record. We download the
+    // FULL to-be-deleted torrent objects (not just hashes) so a
+    // future restore tool has the per-file selection metadata.
+    const wantBackup = $("backup-toggle").checked;
+    if (wantBackup) {
+      const toDelete = _allTorrents.filter(t => _brokenIds.includes(t.id));
+      downloadBackup(toDelete);
+    }
+
+    show("deleting");
+    const dry = isDryRun();
+    const bar = $("delete-progress");
+    const detail = $("delete-detail");
+    bar.max = _brokenIds.length;
+    bar.value = 0;
+    let ok = 0, failed = 0;
+    for (let i = 0; i < _brokenIds.length; i++) {
+      const id = _brokenIds[i];
+      if (dry) {
+        // Dry-run path: simulate the per-call latency the real RD
+        // limiter would impose so the UX feels honest. Keep it shorter
+        // than 240ms so users running this for testing don't sit there
+        // staring at the progress bar — 60ms is enough to feel real.
+        await window.litterbox.sleep(60);
+        ok++;
+      } else {
+        try {
+          const r = await window.litterbox.proxiedFetch(
+            `/rest/1.0/torrents/delete/${encodeURIComponent(id)}`,
+            { method: "DELETE" }
+          );
+          if (r.ok || r.status === 204 || r.status === 404) ok++; else failed++;
+        } catch (e) {
+          failed++;
+        }
+      }
+      bar.value = i + 1;
+      const label = dry ? "would have deleted" : "deleted";
+      detail.textContent = `${i + 1} of ${_brokenIds.length} — ${ok} ${label}, ${failed} failed`;
+    }
+    hide("deleting");
+
+    // Before/after stink rating. After = before, with the actually-
+    // deleted bytes/count subtracted off. In dry-run we still show
+    // the projection (so the user can see what would have happened)
+    // but explicitly labelled.
+    if (_beforeStats) {
+      const beforeStink = stinkRating(_beforeStats.brokenBytes, _beforeStats.libraryBytes);
+      // Bytes-deleted approximation: assume the per-torrent delete
+      // success rate is uniform across the broken set (good enough —
+      // RD doesn't tell us which specific torrents we couldn't
+      // delete in the bulk loop without per-call tracking).
+      const deletedFrac = _brokenIds.length > 0 ? (ok / _brokenIds.length) : 0;
+      const remainingBrokenBytes = _beforeStats.brokenBytes * (1 - deletedFrac);
+      const remainingLibBytes = _beforeStats.libraryBytes - (_beforeStats.brokenBytes - remainingBrokenBytes);
+      const afterStink = stinkRating(remainingBrokenBytes, remainingLibBytes);
+      $("ba-before-rating").textContent = `${beforeStink.label} (${beforeStink.score}/10)`;
+      $("ba-before-rating").className = `ba-rating stink-${beforeStink.tone}`;
+      $("ba-before-detail").textContent = `${beforeStink.pct.toFixed(1)}% rot, ${fmtBytes(_beforeStats.brokenBytes)} dead weight`;
+      $("ba-after-rating").textContent = dry
+        ? `🧪 would be ${afterStink.label} (${afterStink.score}/10)`
+        : `${afterStink.label} (${afterStink.score}/10)`;
+      $("ba-after-rating").className = `ba-rating stink-${afterStink.tone}`;
+      $("ba-after-detail").textContent = dry
+        ? "(dry-run — nothing actually deleted)"
+        : `${afterStink.pct.toFixed(1)}% rot, ${fmtBytes(remainingBrokenBytes)} dead weight`;
+    }
+
+    show("done");
+    if (dry) {
+      $("done-title").textContent = `🧪 Dry-run finished — ${ok} would have been scooped`;
+      $("done-detail").textContent = "Nothing actually deleted. Toggle off dry-run mode to run for real.";
+    } else if (failed === 0) {
+      $("done-title").textContent = `🐈‍⬛ Litterbox emptied — ${ok} broken torrent${ok === 1 ? "" : "s"} scooped`;
+      $("done-detail").textContent = "Your library is freshly clean. Re-scan to confirm or share the news above.";
+    } else {
+      $("done-title").textContent = `🧹 Scooped ${ok}, ${failed} resisted`;
+      $("done-detail").textContent = "Failed rows usually mean RD threw a transient error — try re-scan + re-run.";
+    }
+  });
+
+  $("rescan-button").addEventListener("click", () => {
+    hide("done");
+    $("scan-progress").value = 0;
+    runScan();
+  });
+
+  $("signout-button").addEventListener("click", () => {
+    localStorage.clear();
+    window.location.href = "/";
+  });
+
+  // Kick the scan on page load.
+  runScan().catch((err) => {
+    $("loading-status").innerHTML = `<span class="warn">Scan failed:</span> ${
+      window.litterbox.escapeHTML(err.message)
+    }`;
+  });
+})();
+</script>
+</body>
+</html>

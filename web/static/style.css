@@ -1,0 +1,648 @@
+/* litterbox — minimal CSS for the auth landing + dashboard.
+ * No framework. Designed to read clearly when a user opens
+ * "view source" to check what the page is doing before signing in.
+ */
+
+:root {
+  --bg: #0f1117;
+  --fg: #e6e9ef;
+  --muted: #8c93a3;
+  --accent: #7aa6ff;
+  --ok: #67d391;
+  --warn: #ffb347;
+  --danger: #ff6b6b;
+  --card: #181b24;
+  --border: #2a2f3d;
+  --max-width: 760px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+header, main, footer {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+header {
+  position: relative;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+/* Logo link — clicking the cat returns the user to /, which the
+ * landing-page handler redirects straight to /dashboard.html when
+ * a token is in localStorage. Effectively "back to home base". No
+ * underline so it reads as a header, not a hyperlink. */
+.logo-link {
+  color: inherit;
+  text-decoration: none;
+}
+.logo-link:hover {
+  opacity: 0.85;
+}
+
+.tagline {
+  color: var(--muted);
+  margin: 0.25rem 0 0;
+}
+
+/* Persistent sign-out link, mounted in <header> via app.js whenever
+ * an OAuth token is in localStorage. Absolute-positioned top-right
+ * so it never disturbs the existing header content. Pill-shaped
+ * border so it reads as an interactive control without dominating
+ * the page. */
+.header-signout {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+  background: var(--card);
+}
+
+.header-signout:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+main section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+main section h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+button {
+  background: var(--accent);
+  color: #0a0c12;
+  border: none;
+  border-radius: 0.4rem;
+  padding: 0.7rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover { filter: brightness(1.1); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+button.danger { background: var(--danger); color: #fff; }
+button.muted { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+
+code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.9em;
+}
+
+/* OAuth device-code panel — rendered into #signin-status during the
+ * device flow. Bigger / more visible than a single status line so the
+ * user code is obvious and the open-RD action is one click away. */
+.oauth-panel {
+  margin: 0.75rem 0;
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  text-align: left;
+}
+.oauth-step {
+  margin: 0.25rem 0;
+  font-weight: 600;
+}
+.oauth-code-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.5rem 0 1rem;
+  flex-wrap: wrap;
+}
+.oauth-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+  padding: 0.5rem 0.9rem;
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 0.4rem;
+  user-select: all;
+}
+.oauth-copy {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+  padding: 0.5rem 0.9rem;
+}
+.oauth-copy:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+.oauth-open {
+  display: inline-block;
+  background: var(--accent);
+  color: #0a0c12;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.7rem 1.2rem;
+  border-radius: 0.4rem;
+  margin: 0.25rem 0 0.5rem;
+}
+.oauth-open:hover { filter: brightness(1.1); }
+.oauth-open:visited { color: #0a0c12; }
+.oauth-poll {
+  margin-top: 0.75rem;
+}
+.oauth-form {
+  margin: 0.25rem 0 0.5rem;
+}
+.oauth-fallback {
+  margin-top: 1rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.75rem;
+}
+.oauth-fallback summary {
+  cursor: pointer;
+}
+.oauth-fallback[open] summary {
+  margin-bottom: 0.5rem;
+}
+
+a { color: var(--accent); }
+a:visited { color: var(--accent); }
+
+footer {
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+
+/* Dashboard-specific elements (used on /dashboard.html). */
+
+.counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.count-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.count-card .num {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.count-card .label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.count-card.broken .num { color: var(--danger); }
+.count-card.healthy .num { color: var(--ok); }
+
+progress {
+  width: 100%;
+  height: 1rem;
+  border-radius: 0.25rem;
+  overflow: hidden;
+}
+
+.confirm-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.6rem;
+  font-size: 1rem;
+  font-family: monospace;
+}
+
+/* Statistics row — sits below the count cards on the dashboard.
+ * Same grid pattern as .counts so the visual rhythm carries. */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+}
+
+/* Flex-column so the icon sits top, value in the middle, label
+ * always pinned at the bottom. Without this, a card whose value
+ * wraps to two lines pushes its label down out of alignment with
+ * the others (e.g. when the stinkiest-reason value is a long
+ * synthesized label). */
+.stat-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.25rem;
+}
+
+.stat-card.warn { border-color: var(--warn); }
+.stat-card .stat-icon { font-size: 1.5rem; margin: 0; }
+.stat-card .stat-num {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.25rem 0 0;
+  line-height: 1.2;
+  /* Balance long values across two lines instead of leaving one
+   * word stranded on line 2. Falls back gracefully on browsers
+   * that don't support the property. */
+  text-wrap: balance;
+}
+.stat-card .stat-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.stat-card.warn .stat-num { color: var(--warn); }
+
+/* Dry-run toggle — small, muted, sits below the danger button so
+ * a user testing locally can see it without it competing for
+ * attention with the real action. */
+
+.dryrun-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.75rem;
+  user-select: none;
+  cursor: pointer;
+}
+.dryrun-toggle input { cursor: pointer; }
+
+/* Share section — three tone-shifted cards, each with a copy +
+ * tweet button pair. Stacks vertically because the content is
+ * paragraph-shaped (long-form social media copy), not card-grid
+ * shaped. */
+
+.share { margin-top: 2rem; }
+.share h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
+
+.share-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0.4rem;
+  padding: 0.85rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.share-card .share-tone {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.share-card .share-text {
+  margin: 0.3rem 0 0.75rem;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+}
+
+.share-card .share-actions {
+  margin: 0;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.share-card .share-actions button {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.8rem;
+}
+
+/* Stink rating — the headline-of-headlines on the dashboard. Sits
+ * above the count cards because it's the gut-punch the user came
+ * for. Coloured ring around the rating so the tone reads instantly. */
+
+.stink {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin: 0.5rem 0 1.25rem;
+  text-align: center;
+}
+
+.stink-prelude {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+
+.stink-rating {
+  margin: 0.4rem 0 0.3rem;
+  font-size: 2.2rem;
+  font-weight: 700;
+}
+
+.stink-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.stink-ok     { color: var(--ok); }
+.stink-warn   { color: var(--warn); }
+.stink-danger { color: var(--danger); }
+
+/* Pie chart + legend. The pie is a pure CSS conic-gradient backed
+ * div; we compute the gradient string in JS and assign to the
+ * background style. Legend lists every visible segment with its
+ * swatch + counts so accessibility doesn't depend on the visual. */
+
+.pie-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1.5rem;
+  align-items: center;
+  margin: 1rem 0 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .pie-row {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+.pie {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: conic-gradient(var(--muted) 0% 100%); /* JS overwrites */
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.2rem 0;
+}
+
+.legend .swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex: 0 0 14px;
+}
+
+/* Filtered-class callout — sits above the delete-block when the
+ * May 2026 regex actually caught something. Purple accent ties it
+ * back to the pie's filtered slice colour. */
+
+.filtered-callout {
+  background: rgba(180, 92, 255, 0.08);
+  border: 1px solid rgba(180, 92, 255, 0.4);
+  border-left-width: 3px;
+  border-radius: 0.4rem;
+  padding: 0.85rem 1rem;
+  margin: 1rem 0;
+}
+
+.filtered-callout p {
+  margin: 0 0 0.4rem;
+}
+
+.filtered-callout p:last-child {
+  margin-bottom: 0;
+}
+
+/* Before / after stink comparison on the done state. Two cards
+ * with an arrow between them. Stacks vertically on narrow screens. */
+
+.before-after {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+@media (max-width: 600px) {
+  .before-after {
+    grid-template-columns: 1fr;
+  }
+  .before-after .ba-arrow { display: none; }
+}
+
+.ba-cell {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.ba-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ba-rating {
+  margin: 0.3rem 0 0.25rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.ba-detail {
+  margin: 0;
+}
+
+.ba-arrow {
+  font-size: 1.6rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Two-step delete flow: Quick wipe + Deep clean + Discovery.
+ * Each step rendered as a card with a numbered heading and a tight
+ * intro paragraph. Discovery card uses a different accent because
+ * it's read-only (no destructive action), so visually distinct
+ * from the two destructive steps. */
+
+.step {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  margin: 1rem 0;
+}
+
+.step h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+#step-deepclean .step h3,
+#step-deepclean h3 {
+  color: var(--accent);
+}
+
+#step-discovery {
+  border-left: 3px solid #b45cff;
+}
+
+#deepclean-progress progress {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.discovery-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.5rem 0 1rem;
+}
+
+.discovery-list li {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.discovery-list li:last-child {
+  border-bottom: none;
+}
+
+/* Landing-page extras for the rug-pull narrative section. */
+
+section.context ul,
+section.bigger-picture {
+  /* nothing special — just inherit the base section padding */
+}
+
+section.context li {
+  margin: 0.5rem 0;
+}
+
+/* Detection-pattern chip grid — shared by the landing-page
+ * `section.detect` block and the dashboard `details.detect-strip`.
+ * Chips render as monospace pills so the patterns are visually
+ * distinct from prose; grouped by category. */
+.regex-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.chip-group-label {
+  margin: 0 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-width: 11rem;
+}
+.chip {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+section.detect {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+}
+details.detect-strip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  margin: 0 auto 1rem;
+  max-width: var(--max-width);
+}
+details.detect-strip summary {
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.25rem 0;
+}
+details.detect-strip[open] summary {
+  margin-bottom: 0.5rem;
+}
+
+/* Share-card re-roll button — small inline action in each card's
+ * actions row. Differentiated from the primary Copy/Tweet buttons
+ * by being borderless + muted; signals "minor utility" rather than
+ * "main action". */
+.share-reroll {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+}
+.share-reroll:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
