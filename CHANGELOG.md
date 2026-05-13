@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/elfhosted/litterbox/compare/1.5.0...1.6.0) (2026-05-13)
+
+
+### Features
+
+* **ui:** pin local-fallback docker tag to the running version ([d902c6a](https://github.com/elfhosted/litterbox/commit/d902c6a4ff19e00b5725594874280e88a01d2eea))
+
 ## [1.5.0](https://github.com/elfhosted/litterbox/compare/1.4.1...1.5.0) (2026-05-13)
 
 
