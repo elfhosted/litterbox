@@ -170,6 +170,14 @@
           <button type="button" class="muted" id="rd-block-copy">📋 Copy</button>
           Then open <a href="http://localhost:8080" target="_blank" rel="noopener"><code>http://localhost:8080</code></a>.
         </p>
+        <p class="rd-block-footnote">
+          <strong>Still failing after running locally?</strong> Earlier
+          LitterBox versions used a TLS fingerprint that triggered RD's
+          anti-abuse on user tokens. If your token now refuses to
+          authenticate from <em>any</em> IP, that's likely why — regenerate
+          it at <a href="https://real-debrid.com/apitoken" target="_blank" rel="noopener">real-debrid.com/apitoken</a>
+          as a last resort.
+        </p>
       </div>`;
     const copyBtn = el.querySelector("#rd-block-copy");
     if (copyBtn) {

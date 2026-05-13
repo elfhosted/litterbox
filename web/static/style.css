@@ -729,3 +729,13 @@ details.detect-strip[open] summary {
   padding: 0;
   font-size: 0.85rem;
 }
+.rd-block-banner .rd-block-footnote {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.rd-block-banner .rd-block-footnote strong {
+  color: var(--fg);
+}
