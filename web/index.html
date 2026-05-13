@@ -27,27 +27,26 @@
       OAuth (no API key entry, no server-side storage), it tallies the
       casualties, rates the rot, and offers a one-click bulk-scoop.
     </p>
-    <div class="signin-token">
-      <label for="api-token-input"><strong>Sign in with your Real-Debrid API token:</strong></label>
-      <input id="api-token-input" type="password" autocomplete="off" spellcheck="false" placeholder="paste your API token here">
-      <button id="api-token-button" type="button">Use this token</button>
+    <div class="signin-oauth">
+      <p><strong>Sign in via Real-Debrid:</strong> no API key, no copy-paste — you'll be prompted to authorize LitterBox at real-debrid.com with a one-click confirm.</p>
+      <button id="signin-button" type="button">🐾 Sign in with Real-Debrid</button>
+      <p id="signin-status" class="muted small"></p>
       <p class="muted small">
-        Get your token from
-        <a href="https://real-debrid.com/apitoken" target="_blank" rel="noopener">real-debrid.com/apitoken</a>.
-        It's stored only in your browser's <code>localStorage</code> — never sent to our server beyond the stateless proxy that forwards your requests to Real-Debrid.
+        Your token lives only in your browser's <code>localStorage</code> — never sent to our server beyond a stateless proxy that forwards your requests to Real-Debrid.
       </p>
-      <p id="api-token-status" class="muted small"></p>
     </div>
 
-    <details class="signin-oauth-fallback">
-      <summary class="muted small">— or sign in with OAuth instead —</summary>
+    <details class="signin-token-fallback">
+      <summary class="muted small">— or paste a Real-Debrid API token instead —</summary>
       <p class="muted small">
-        OAuth signs you in via Real-Debrid's authorization flow (no API key to copy, but slower and currently
-        rate-limited by RD's per-IP throttle if many users sign in at once). The token still lives only in
-        your browser; the OAuth flow just gets it there a different way.
+        If you'd rather skip the OAuth step and supply your own token directly, grab one from
+        <a href="https://real-debrid.com/apitoken" target="_blank" rel="noopener">real-debrid.com/apitoken</a>.
+        Same trust model: token stays in your browser, no server-side storage.
       </p>
-      <button id="signin-button" type="button">🐾 Sign in with Real-Debrid (OAuth)</button>
-      <p id="signin-status" class="muted small"></p>
+      <label for="api-token-input" class="muted small">Real-Debrid API token:</label>
+      <input id="api-token-input" type="password" autocomplete="off" spellcheck="false" placeholder="paste your API token here">
+      <button id="api-token-button" type="button" class="muted">Use this token</button>
+      <p id="api-token-status" class="muted small"></p>
     </details>
   </section>
 

@@ -661,18 +661,29 @@ details.detect-strip[open] summary {
   border-color: var(--accent);
 }
 
-/* Sign-in: API-token form is the primary path; OAuth tucked under a
- * <details> below. The token block reads as "you do a small thing
- * once" rather than "click button and wait" — matches the actual
- * cost and skips RD's OAuth rate-limit entirely. */
-.signin-token {
+/* Sign-in: OAuth is the primary path (less scary for users than
+ * pasting raw API tokens); the API-token form is tucked under a
+ * <details> for those who prefer it (advanced users, or if RD's
+ * OAuth endpoints get rate-limited). */
+.signin-oauth {
   margin: 0 0 1rem;
 }
-.signin-token label {
-  display: block;
+.signin-token-fallback {
+  margin-top: 1rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.75rem;
+}
+.signin-token-fallback summary {
+  cursor: pointer;
+}
+.signin-token-fallback[open] summary {
   margin-bottom: 0.5rem;
 }
-.signin-token input[type="password"] {
+.signin-token-fallback label {
+  display: block;
+  margin: 0.5rem 0 0.25rem;
+}
+.signin-token-fallback input[type="password"] {
   width: 100%;
   max-width: 32rem;
   padding: 0.55rem 0.75rem;
@@ -684,20 +695,9 @@ details.detect-strip[open] summary {
   color: var(--fg);
   margin-right: 0.5rem;
 }
-.signin-token input[type="password"]:focus {
+.signin-token-fallback input[type="password"]:focus {
   border-color: var(--accent);
   outline: none;
-}
-.signin-oauth-fallback {
-  margin-top: 1rem;
-  border-top: 1px dashed var(--border);
-  padding-top: 0.75rem;
-}
-.signin-oauth-fallback summary {
-  cursor: pointer;
-}
-.signin-oauth-fallback[open] summary {
-  margin-bottom: 0.5rem;
 }
 
 /* Banner rendered when RD's WAF / IP-reputation filter is blocking
