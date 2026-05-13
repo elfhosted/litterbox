@@ -159,6 +159,12 @@
       </p>
       <p id="deepclean-actions">
         <button id="deepclean-button" type="button">🔍 Run deep clean</button>
+        <label class="dryrun-toggle small muted">
+          <input type="checkbox" id="deepclean-verify-toggle">
+          🧪 Verify mode — probe regex-flagged torrents too. Slower, but
+          confirms whether RD still filters the patterns we think they do
+          (and surfaces any that have been quietly reversed).
+        </label>
       </p>
       <div id="deepclean-progress" hidden>
         <progress id="deepclean-bar" max="100" value="0"></progress>
@@ -1466,8 +1472,11 @@
         : `~${etaSec}s`;
       $("deepclean-eta").textContent = etaStr;
     }
-    // Stash for the click handler.
+    // Stash both candidate sets for the click handler — the verify-
+    // mode toggle picks the "all" variant.
     _probeCandidates = probeCandidates;
+    _allProbeCandidates = all.filter(t => t.links && t.links.length > 0);
+    refreshDeepCleanLabels();
 
     // "All clean" only renders when nothing is actionable — neither
     // step has work to do.
@@ -1500,8 +1509,28 @@
   }
 
   // Probe candidates captured at scan time so the Step 2 button
-  // doesn't have to recompute from _allTorrents.
+  // doesn't have to recompute from _allTorrents. The "all" variant
+  // covers verify mode where the user opts to probe regex-flagged
+  // torrents too (validates that the regex still reflects RD's
+  // current filter list).
   let _probeCandidates = [];
+  let _allProbeCandidates = [];
+
+  function deepCleanTarget() {
+    return $("deepclean-verify-toggle").checked
+      ? _allProbeCandidates
+      : _probeCandidates;
+  }
+
+  function refreshDeepCleanLabels() {
+    const target = deepCleanTarget();
+    $("deepclean-count").textContent = target.length;
+    const etaSec = Math.ceil(target.length * 0.25);
+    $("deepclean-eta").textContent = etaSec >= 60
+      ? `~${Math.ceil(etaSec / 60)} min`
+      : `~${etaSec}s`;
+  }
+  $("deepclean-verify-toggle").addEventListener("change", refreshDeepCleanLabels);
 
   // ============================================================
   // Step 2: Deep clean click handler.
@@ -1512,12 +1541,14 @@
     hide("deepclean-result");
     const bar = $("deepclean-bar");
     const detail = $("deepclean-detail");
-    bar.max = _probeCandidates.length;
+    const verifyMode = $("deepclean-verify-toggle").checked;
+    const target = verifyMode ? _allProbeCandidates : _probeCandidates;
+    bar.max = target.length;
     bar.value = 0;
 
     let result;
     try {
-      result = await runDeepProbe(_probeCandidates, ({ i, total, filtered, healthy, deadLink, cached, errored, retry }) => {
+      result = await runDeepProbe(target, ({ i, total, filtered, healthy, deadLink, cached, errored, retry }) => {
         bar.value = i + 1;
         const base = `${i + 1} / ${total} — ` +
           `${filtered} filtered · ${deadLink} dead-link · ${healthy} healthy · ${cached} cached · ${errored} errored`;
@@ -1565,14 +1596,35 @@
         .filter(([, v]) => v.outcome === "filtered" || v.outcome === "dead-link")
         .map(([k]) => k)
     );
-    _deepCatchIds = _probeCandidates
+    _deepCatchIds = target
       .filter(t => catchHashes.has(t.hash))
       .map(t => t.id);
 
-    const summary = result
+    let summary = result
       ? `Deep probe complete — ${result.filtered} May-2026 filtered + ${result.deadLink} dead-link torrents found ` +
         `(${result.cached} cached from a prior probe, ${result.errored} errored).`
       : `Deep probe aborted — ${_deepCatchIds.length} broken torrents identified so far.`;
+
+    // Verify-mode extra: of the regex-flagged torrents we probed,
+    // how many actually came back playable? Non-zero means RD has
+    // un-filtered those patterns and the regex needs refining.
+    if (verifyMode) {
+      let regexConfirmed = 0, regexReversed = 0;
+      for (const t of target) {
+        if (!isBroken(t)) continue; // only the regex-flagged subset
+        const v = cache[t.hash];
+        if (!v) continue;
+        if (v.outcome === "filtered") regexConfirmed++;
+        else if (v.outcome === "healthy") regexReversed++;
+      }
+      summary += ` Verify mode: ${regexConfirmed} regex-flagged torrents confirmed still filtered`;
+      if (regexReversed > 0) {
+        summary += `, ${regexReversed} came back playable — regex may need updating.`;
+      } else {
+        summary += ".";
+      }
+    }
+
     $("deepclean-result-summary").textContent = summary;
 
     if (_deepCatchIds.length > 0) {
