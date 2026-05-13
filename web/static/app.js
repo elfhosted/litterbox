@@ -146,6 +146,15 @@
   // filter is blocking us. Tells the user "this is not your fault,
   // and here's the immediate workaround" in one place.
   function renderRdBlockBanner(el) {
+    // Pin the docker tag to the version this dashboard is running.
+    // Reads from /api/config (mountConfig populates this on load) so
+    // the suggested local instance matches what they were just using.
+    // Falls back to :rolling if cfg hasn't loaded yet (unlikely — the
+    // user has to be signed in and have clicked a button before this
+    // banner appears).
+    const version = (window.litterbox && window.litterbox.cfg && window.litterbox.cfg.version)
+      || "rolling";
+    const cmd = `docker run --rm -p 8080:8080 ghcr.io/elfhosted/litterbox:${version}`;
     el.innerHTML = `
       <div class="rd-block-banner">
         <p class="rd-block-title">⚠ Real-Debrid is blocking our IP right now.</p>
@@ -156,7 +165,7 @@
           isn't blocking. Same code, same trust model (your token
           stays in your browser), no proxy in the middle.
         </p>
-        <pre><code id="rd-block-cmd">docker run --rm -p 8080:8080 ghcr.io/elfhosted/litterbox:rolling</code></pre>
+        <pre><code id="rd-block-cmd">${escapeHTML(cmd)}</code></pre>
         <p>
           <button type="button" class="muted" id="rd-block-copy">📋 Copy</button>
           Then open <a href="http://localhost:8080" target="_blank" rel="noopener"><code>http://localhost:8080</code></a>.
