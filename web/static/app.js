@@ -216,6 +216,7 @@
         <form method="post" action="https://real-debrid.com/device" target="_blank" class="oauth-form">
           <input type="hidden" name="usercode" value="${code}">
           <input type="hidden" name="action" value="Continue">
+          <input type="hidden" name="deviceName" value="LitterBox | ElfHosted">
           <button type="submit" class="oauth-open">🔗 Approve LitterBox at Real-Debrid</button>
         </form>
         <p class="muted small oauth-poll">⏳ Waiting for confirmation — we'll bounce you to your dashboard the moment you approve.</p>
