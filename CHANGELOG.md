@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/elfhosted/litterbox/compare/1.0.0...1.0.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* **report:** derive probe totals from persisted cache, not in-memory tally ([f51ed11](https://github.com/elfhosted/litterbox/commit/f51ed11562156ac177501e47f049704a079eab7d))
+* **server:** short Cache-Control on static assets ([01da518](https://github.com/elfhosted/litterbox/commit/01da518c37064247c37539aaf46e77fc4f31467c))
+
 ## 1.0.0 (2026-05-13)
 
 
