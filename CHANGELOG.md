@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/elfhosted/litterbox/compare/1.1.1...1.2.0) (2026-05-13)
+
+
+### Features
+
+* **proxy:** outbound proxy pool to dilute RD per-IP rate limit ([a315301](https://github.com/elfhosted/litterbox/commit/a315301bc0204ee933d6f325db7608b0f9ddbc0d))
+
 ## [1.1.1](https://github.com/elfhosted/litterbox/compare/1.1.0...1.1.1) (2026-05-13)
 
 
