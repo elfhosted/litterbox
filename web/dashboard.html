@@ -1381,7 +1381,11 @@
     _quickWipeIds = all.filter(isBroken).map(t => t.id);
     _brokenIds = _quickWipeIds.slice(); // Quick wipe is the default active set
     _allTorrents = all;
-    _beforeStats = stats;
+    // Only capture _beforeStats on the FIRST scan of the session. On
+    // re-scan after a cleanup the current scan returns ~0 broken; the
+    // share copy + Reddit report should still tell the story of what
+    // got scooped, not "0 broken in my library" (post-cleanup state).
+    if (!_beforeStats) _beforeStats = stats;
 
     $("count-total").textContent = stats.total;
     $("count-healthy").textContent = stats.healthy;
@@ -1470,7 +1474,11 @@
     annotateCoOccurrence(candidates, all);
     renderDiscovery(candidates);
 
-    renderShareCopy(stats, stink);
+    // Share copy tells the story of cleanup, so it reads from
+    // _beforeStats (the initial scan) — see comment above. On the
+    // first scan _beforeStats === stats, so this is a no-op then.
+    const shareStink = stinkRating(_beforeStats.brokenBytes, _beforeStats.libraryBytes);
+    renderShareCopy(_beforeStats, shareStink);
 
     hide("loading");
     show("results");
