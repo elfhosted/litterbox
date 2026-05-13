@@ -161,36 +161,82 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), upstreamTimeout)
 	defer cancel()
 
-	upstream, err := http.NewRequestWithContext(ctx, r.Method, target.String(), r.Body)
-	if err != nil {
-		h.log.Warn("proxy: build upstream request failed", "err", err)
-		http.Error(w, `{"error":"upstream request build failed"}`, http.StatusInternalServerError)
-		return
-	}
-	// Forward only the headers RD actually needs. Cookie / Referer /
-	// Origin etc. would just confuse RD's auth path and leak browser
-	// state we don't need to expose.
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		upstream.Header.Set("Authorization", auth)
-	}
-	if ct := r.Header.Get("Content-Type"); ct != "" {
-		upstream.Header.Set("Content-Type", ct)
-	}
-	// User-Agent: default is to forward the browser's verbatim (most
-	// honest representation — we're CORS-bypassing a browser request).
-	// If overrideUserAgent is set (OUTBOUND_USER_AGENT env), replace it
-	// on every outbound. Operator-rotatable hedge against RD's WAF
-	// extending to broader UA filtering.
-	switch {
-	case h.overrideUserAgent != "":
-		upstream.Header.Set("User-Agent", h.overrideUserAgent)
-	default:
-		if ua := r.Header.Get("User-Agent"); ua != "" {
-			upstream.Header.Set("User-Agent", ua)
-		}
+	// Buffer the request body upfront so we can replay it on retry.
+	// 16MB cap mirrors the response-side limit; RD's POST bodies are
+	// tiny (form-encoded auth, magnet add, etc).
+	var reqBody []byte
+	if r.Body != nil {
+		reqBody, _ = io.ReadAll(io.LimitReader(r.Body, 16<<20))
+		r.Body.Close()
 	}
 
-	resp, err := h.pickClient().Do(upstream)
+	// Retry-on-failure: when more than one outbound client is
+	// configured, retry on transport error or HTTP 451 (RD's WAF/IP-
+	// reputation rejection — the bad-IP signal). proxybase rotates
+	// the backing IP per sticky-token, and ~half the draws land on
+	// flagged IPs; one retry takes the success rate from ~95% to
+	// near-100% empirically. Skip retry when only one client is
+	// configured — there's no "different egress" to retry through.
+	maxAttempts := 1
+	if len(h.clients) > 1 {
+		maxAttempts = 3
+	}
+	var resp *http.Response
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		var bodyReader io.Reader
+		if len(reqBody) > 0 {
+			bodyReader = bytes.NewReader(reqBody)
+		}
+		upstream, buildErr := http.NewRequestWithContext(ctx, r.Method, target.String(), bodyReader)
+		if buildErr != nil {
+			h.log.Warn("proxy: build upstream request failed", "err", buildErr)
+			http.Error(w, `{"error":"upstream request build failed"}`, http.StatusInternalServerError)
+			return
+		}
+		// Forward only the headers RD actually needs. Cookie / Referer /
+		// Origin etc. would just confuse RD's auth path and leak browser
+		// state we don't need to expose.
+		if auth := r.Header.Get("Authorization"); auth != "" {
+			upstream.Header.Set("Authorization", auth)
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "" {
+			upstream.Header.Set("Content-Type", ct)
+		}
+		// User-Agent: default is to forward the browser's verbatim (most
+		// honest representation — we're CORS-bypassing a browser request).
+		// If overrideUserAgent is set (OUTBOUND_USER_AGENT env), replace it
+		// on every outbound. Operator-rotatable hedge against RD's WAF
+		// extending to broader UA filtering.
+		switch {
+		case h.overrideUserAgent != "":
+			upstream.Header.Set("User-Agent", h.overrideUserAgent)
+		default:
+			if ua := r.Header.Get("User-Agent"); ua != "" {
+				upstream.Header.Set("User-Agent", ua)
+			}
+		}
+
+		resp, err = h.pickClient().Do(upstream)
+		if attempt >= maxAttempts {
+			break
+		}
+		if err != nil {
+			h.log.Info("proxy: transport error, retrying with different egress",
+				"attempt", attempt, "host", target.Host, "path", target.Path, "err", err)
+			continue
+		}
+		if resp.StatusCode == 451 {
+			// 451 = RD's WAF/IP-reputation block. Different egress
+			// IP probably gets through. Drain + close the body so the
+			// underlying connection can be reused.
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			h.log.Info("proxy: upstream 451, retrying with different egress",
+				"attempt", attempt, "host", target.Host, "path", target.Path)
+			continue
+		}
+		break
+	}
 	if err != nil {
 		h.log.Warn("proxy: upstream call failed", "host", target.Host, "err", err)
 		http.Error(w, `{"error":"upstream call failed"}`, http.StatusBadGateway)
