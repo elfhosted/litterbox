@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/elfhosted/litterbox/compare/1.4.0...1.4.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* **proxy:** hash-route by token + stop retry-on-451 (was burning tokens) ([f2aa2c1](https://github.com/elfhosted/litterbox/commit/f2aa2c17cd82514de54c323814718b6967250466))
+
 ## [1.4.0](https://github.com/elfhosted/litterbox/compare/1.3.1...1.4.0) (2026-05-13)
 
 
