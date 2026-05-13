@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/elfhosted/litterbox/compare/1.4.1...1.5.0) (2026-05-13)
+
+
+### Features
+
+* **ui:** render local-fallback banner when RD blocks our IP (451) ([ec24114](https://github.com/elfhosted/litterbox/commit/ec24114bd1ef91330f0736ef3dd8e75b99dd6737))
+
+
+### Bug Fixes
+
+* **ui:** trim local-fallback banner copy ([8868456](https://github.com/elfhosted/litterbox/commit/8868456e580fdc3b8f30a61ca8e611b97204c93a))
+
 ## [1.4.1](https://github.com/elfhosted/litterbox/compare/1.4.0...1.4.1) (2026-05-13)
 
 
