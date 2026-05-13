@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/elfhosted/litterbox/compare/1.6.0...1.7.0) (2026-05-13)
+
+
+### Features
+
+* **proxy:** mimic Chrome TLS fingerprint via uTLS ([53b2b01](https://github.com/elfhosted/litterbox/commit/53b2b013c17ed5e452119911b12025ab6c54b8b9))
+
+
+### Bug Fixes
+
+* **ui:** note token-burn-from-earlier-versions on 451 banner ([e53d9e5](https://github.com/elfhosted/litterbox/commit/e53d9e597834c61f030354c6e80893143e40b6ad))
+
 ## [1.6.0](https://github.com/elfhosted/litterbox/compare/1.5.0...1.6.0) (2026-05-13)
 
 
