@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/elfhosted/litterbox/compare/1.3.1...1.4.0) (2026-05-13)
+
+
+### Features
+
+* **proxy:** OUTBOUND_USER_AGENT env var to override outbound UA ([96c2681](https://github.com/elfhosted/litterbox/commit/96c26813e0e57d8191ad2e3ec035de617c86ec35))
+* **proxy:** retry on 451 + transport error when multiple egresses configured ([1bcd063](https://github.com/elfhosted/litterbox/commit/1bcd06314045fcd8def57571ab6d2bc79cdd6d4a))
+
 ## [1.3.1](https://github.com/elfhosted/litterbox/compare/1.3.0...1.3.1) (2026-05-13)
 
 
