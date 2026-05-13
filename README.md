@@ -106,12 +106,7 @@ static-asset host plus a CORS-bypass proxy.
 ## Deployment
 
 This is the upstream source. ElfHosted runs LitterBox publicly at
-[litterbox.elfhosted.com](https://litterbox.elfhosted.com); k8s
-manifests live in
-[elfhosted/myprecious](https://github.com/elfhosted/myprecious).
-
-Stateless, single-binary, no PVCs, no shared store — runs comfortably
-with `replicas: 2+` behind any load balancer.
+[litterbox.elfhosted.com](https://litterbox.elfhosted.com)
 
 ## After LitterBox: migrate from Real-Debrid to TorBox
 
