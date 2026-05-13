@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/elfhosted/litterbox/compare/1.0.1...1.1.0) (2026-05-13)
+
+
+### Features
+
+* **deepclean:** verify mode probes regex-flagged torrents too ([78a5e1e](https://github.com/elfhosted/litterbox/commit/78a5e1e86a2f10dea57e5af98069d52e73758301))
+
 ## [1.0.1](https://github.com/elfhosted/litterbox/compare/1.0.0...1.0.1) (2026-05-13)
 
 
