@@ -34,6 +34,7 @@ type Config struct {
 	Version                string `json:"version"`
 	RedditMegathreadURL    string `json:"redditMegathreadUrl"`
 	RDBlockedFilenameRegex string `json:"rdBlockedFilenameRegex"`
+	RDAPIToken             string `json:"rdApiToken,omitempty"`
 }
 
 // Server holds the mux + the proxy handler. Constructed once at

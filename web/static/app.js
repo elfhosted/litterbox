@@ -336,6 +336,31 @@
         window.location.href = "/dashboard.html";
         return;
       }
+      // If the server was started with RD_API_TOKEN, skip OAuth entirely —
+      // verify the token against /user, show the result, then redirect.
+      window.addEventListener("litterbox:config", async (e) => {
+        if (!e.detail.rdApiToken) return;
+        const status = document.getElementById("signin-status");
+        if (signinBtn) signinBtn.style.display = "none";
+        status.textContent = "Real-Debrid API Token: Verifying…";
+        localStorage.setItem(LS.accessToken, e.detail.rdApiToken);
+        try {
+          const r = await proxiedFetch("/rest/1.0/user");
+          if (r.ok) {
+            const user = await r.json();
+            status.innerHTML = `Real-Debrid API Token: <span class="ok">Connected as ${escapeHTML(user.username)}</span>`;
+            setTimeout(() => { window.location.href = "/dashboard.html"; }, 1000);
+          } else {
+            const body = await r.json().catch(() => ({}));
+            const msg = body.error || `HTTP ${r.status}`;
+            status.innerHTML = `Real-Debrid API Token: <span class="warn">${escapeHTML(msg)} — check RD_API_TOKEN</span>`;
+            localStorage.removeItem(LS.accessToken);
+          }
+        } catch (err) {
+          status.innerHTML = `Real-Debrid API Token: <span class="warn">${escapeHTML(err.message)} — check RD_API_TOKEN</span>`;
+          localStorage.removeItem(LS.accessToken);
+        }
+      });
       const status = document.getElementById("signin-status");
       signinBtn.addEventListener("click", async () => {
         signinBtn.disabled = true;

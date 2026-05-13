@@ -101,6 +101,7 @@ func main() {
 		// Fallback is the regex baked in at this release.
 		RDBlockedFilenameRegex: envOr("RD_BLOCKED_FILENAME_REGEX",
 			`\[(rartv|rarbg|eztv)\]|\b(YTS|Erai-raws|CR)\b|(WEB-?Rip|WEB-?DL|AMZN|DSNP)`),
+		RDAPIToken: os.Getenv("RD_API_TOKEN"),
 	}
 	srv, err := server.New(log, webRoot, cfg)
 	if err != nil {

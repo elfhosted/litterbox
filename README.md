@@ -87,6 +87,14 @@ LISTEN=:8080 ./litterbox
 # open http://localhost:8080
 ```
 
+To skip the OAuth flow when running locally, pass your API token from [real-debrid.com/apitoken](https://real-debrid.com/apitoken):
+
+```sh
+RD_API_TOKEN=your_token_here LISTEN=:8080 ./litterbox
+```
+
+The landing page will verify the token and redirect straight to the dashboard. OAuth sign-in remains available as a fallback when `RD_API_TOKEN` is not set.
+
 ## Running in a container
 
 ```sh
@@ -99,6 +107,7 @@ docker run -p 8080:8080 litterbox
 | Variable | Default | Notes |
 | -------- | ------- | ----- |
 | `LISTEN` | `:8080` | HTTP listen address |
+| `RD_API_TOKEN` | | Skip OAuth by using your [API token](https://real-debrid.com/apitoken) |
 
 No database, no secrets, no shared state. The server is purely a
 static-asset host plus a CORS-bypass proxy.
