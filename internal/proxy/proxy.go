@@ -57,8 +57,9 @@ const upstreamTimeout = 30 * time.Second
 // server init and reused for every request — every dependency is
 // read-only.
 type Handler struct {
-	log     *slog.Logger
-	clients []*http.Client // 1 entry when no outbound proxies; N when configured
+	log               *slog.Logger
+	clients           []*http.Client // 1 entry when no outbound proxies; N when configured
+	overrideUserAgent string         // when non-empty, replaces the browser's UA on every outbound
 }
 
 // New constructs the proxy handler. outboundProxies is a list of
@@ -69,14 +70,14 @@ type Handler struct {
 // going out from the same k8s egress, concurrent sign-ins hit 429
 // quickly; outbound proxies dilute that. Empty/nil list = direct.
 //
-// User-Agent forwarding: the proxy forwards whatever UA the browser
-// sent, not a synthetic "litterbox/X.Y.Z" string. A previous
-// litterbox-tagged UA got an entry on RD's WAF blocklist (HTTP 451
-// permission_denied on /oauth/v2/device/code), which broke sign-in
-// entirely. Forwarding the browser's real UA keeps proxy traffic
-// indistinguishable from any other browser hitting RD, which is
-// what it actually is (the proxy is purely a CORS bypass).
-func New(log *slog.Logger, outboundProxies []string) *Handler {
+// User-Agent forwarding: by default the proxy forwards whatever UA
+// the browser sent (the most honest representation — we're CORS-
+// bypassing a browser request). overrideUserAgent, when non-empty,
+// replaces it on every outbound request. Useful when RD's WAF
+// extends from app-fingerprint matching ("litterbox/X.Y.Z" → 451) to
+// broader UA filtering — operator can flip to "curl/8.7.1" or
+// similar (StremThru's recent move) without a rebuild.
+func New(log *slog.Logger, outboundProxies []string, overrideUserAgent string) *Handler {
 	clients := make([]*http.Client, 0, max(1, len(outboundProxies)))
 	if len(outboundProxies) == 0 {
 		// No client-level Timeout: that would cap the whole request
@@ -106,8 +107,10 @@ func New(log *slog.Logger, outboundProxies []string) *Handler {
 			clients = append(clients, &http.Client{})
 		}
 	}
-	log.Info("proxy: outbound transport configured", "client_count", len(clients))
-	return &Handler{log: log, clients: clients}
+	log.Info("proxy: outbound transport configured",
+		"client_count", len(clients),
+		"user_agent_override", overrideUserAgent != "")
+	return &Handler{log: log, clients: clients, overrideUserAgent: overrideUserAgent}
 }
 
 // pickClient returns one of the configured outbound clients at
@@ -173,11 +176,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ct := r.Header.Get("Content-Type"); ct != "" {
 		upstream.Header.Set("Content-Type", ct)
 	}
-	// Forward the browser's User-Agent verbatim. See New() — never
-	// synthesize a "litterbox/..." UA; RD's WAF returns 451 for that
-	// string, which broke sign-in entirely until this was reverted.
-	if ua := r.Header.Get("User-Agent"); ua != "" {
-		upstream.Header.Set("User-Agent", ua)
+	// User-Agent: default is to forward the browser's verbatim (most
+	// honest representation — we're CORS-bypassing a browser request).
+	// If overrideUserAgent is set (OUTBOUND_USER_AGENT env), replace it
+	// on every outbound. Operator-rotatable hedge against RD's WAF
+	// extending to broader UA filtering.
+	switch {
+	case h.overrideUserAgent != "":
+		upstream.Header.Set("User-Agent", h.overrideUserAgent)
+	default:
+		if ua := r.Header.Get("User-Agent"); ua != "" {
+			upstream.Header.Set("User-Agent", ua)
+		}
 	}
 
 	resp, err := h.pickClient().Do(upstream)

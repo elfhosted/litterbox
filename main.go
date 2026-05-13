@@ -103,6 +103,14 @@ func main() {
 		}
 	}
 
+	// OUTBOUND_USER_AGENT — when set, replaces the browser-supplied
+	// UA on every outbound request to RD. Empty (default) forwards
+	// the browser's real UA. Operator-rotatable hedge against RD's
+	// WAF extending to broader UA-string filtering (it already 451s
+	// on "litterbox/X.Y.Z" — could expand to common browser UAs at
+	// any time). See StremThru's switch to "curl/8.7.1" for prior art.
+	outboundUA := os.Getenv("OUTBOUND_USER_AGENT")
+
 	cfg := server.Config{
 		Version: readVersion(),
 		// REDDIT_MEGATHREAD_URL — operator-rotatable per release cycle.
@@ -118,7 +126,7 @@ func main() {
 		RDBlockedFilenameRegex: envOr("RD_BLOCKED_FILENAME_REGEX",
 			`\[(rartv|rarbg|eztv)\]|\b(YTS|Erai-raws|CR)\b|(WEB-?Rip|WEB-?DL|AMZN|DSNP)`),
 	}
-	srv, err := server.New(log, webRoot, cfg, outboundProxies)
+	srv, err := server.New(log, webRoot, cfg, outboundProxies, outboundUA)
 	if err != nil {
 		log.Error("server init failed", "err", err)
 		os.Exit(1)

@@ -54,14 +54,16 @@ type Server struct {
 // RD API, a healthz probe, a config endpoint, and the embedded
 // static SPA. No server-side state — all pattern data lives in the
 // user's browser localStorage.
-func New(log *slog.Logger, webRoot fs.FS, cfg Config, outboundProxies []string) (*Server, error) {
+func New(log *slog.Logger, webRoot fs.FS, cfg Config, outboundProxies []string, outboundUA string) (*Server, error) {
 	mux := http.NewServeMux()
 
 	// /api/proxy — RD CORS workaround. See internal/proxy for the
 	// hostname allowlist and security posture. outboundProxies, if
 	// non-empty, dilutes our egress IP fingerprint across the pool
 	// so RD's per-IP rate limiter doesn't 429 us at scale.
-	proxyHandler := proxy.New(log, outboundProxies)
+	// outboundUA, if non-empty, replaces the browser's UA on every
+	// outbound — hedge against RD WAF extending to broader UA rules.
+	proxyHandler := proxy.New(log, outboundProxies, outboundUA)
 	mux.Handle("/api/proxy", proxyHandler)
 	mux.Handle("/api/proxy/", proxyHandler)
 

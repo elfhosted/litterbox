@@ -102,6 +102,7 @@ docker run -p 8080:8080 litterbox
 | `REDDIT_MEGATHREAD_URL` | (empty) | URL for the "Post to Reddit" button. When empty, the button is hidden. |
 | `RD_BLOCKED_FILENAME_REGEX` | baked-in pattern | Override the fast-pass filename detector without rebuilding. |
 | `OUTBOUND_PROXIES` | (empty) | Comma-separated list of HTTP proxy URLs the `/api/proxy` handler picks from at random per request, to dilute the egress fingerprint when RD rate-limits per source IP. |
+| `OUTBOUND_USER_AGENT` | (empty — forwards browser's UA) | When set, replaces the browser's User-Agent on every outbound request. Hedge against RD's WAF extending to broader UA-string filtering. |
 
 No database, no secrets, no shared state. The server is purely a
 static-asset host plus a CORS-bypass proxy.
