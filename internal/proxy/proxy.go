@@ -195,11 +195,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// for RD payloads (all JSON, all small).
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 
-	// Log upstream non-success responses so a 5xx pattern is
-	// debuggable from the server side. Path-only (no query) keeps
-	// tokens out of the log.
-	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound &&
-		resp.StatusCode != 451 && resp.StatusCode != 401 && resp.StatusCode != 403 {
+	// Log upstream non-success responses. Filter out the noisy-but-
+	// expected cases:
+	//   - 404 anywhere (normal not-found; e.g. /torrents/info/{id}
+	//     after a delete races with a poll)
+	//   - 451 on /unrestrict/link (the documented infringing_file
+	//     signal — fires for every filtered torrent during a deep
+	//     probe, so it's high-volume + already exposed to the user
+	//     via the discovery results)
+	// Everything else is interesting:
+	//   - 451 on /oauth/v2/* or /rest/1.0/* = WAF/IP-reputation
+	//     blocking us, not a user error
+	//   - 401/403 = token problem, useful when debugging
+	//   - 429 = rate-limited, useful for capacity planning
+	//   - 5xx = upstream problem
+	// Path-only (no query) keeps tokens out of the log.
+	noise := resp.StatusCode == http.StatusNotFound ||
+		(resp.StatusCode == 451 && target.Path == "/rest/1.0/unrestrict/link")
+	if !noise && resp.StatusCode >= 400 {
 		snippet := body
 		if len(snippet) > 256 {
 			snippet = snippet[:256]

@@ -1064,7 +1064,19 @@
         return all;
       }
       if (r.status === 204) break;
-      if (!r.ok) throw new Error(`scan page ${page}: ${r.status}`);
+      if (r.status === 451) {
+        let detail = "";
+        try {
+          const text = await r.text();
+          const m = text.match(/"error_code"\s*:\s*(\d+)/);
+          if (m) detail = ` (RD error_code ${m[1]})`;
+        } catch {}
+        throw new Error(`Real-Debrid is blocking LitterBox's request${detail}. This isn't a problem with your account — RD's WAF or IP-reputation filter is rejecting our outbound traffic. Try again in a few minutes.`);
+      }
+      if (r.status === 429) {
+        throw new Error(`Real-Debrid is rate-limiting LitterBox right now (too many requests from our IP). Wait ~60s and try again.`);
+      }
+      if (!r.ok) throw new Error(`scan page ${page}: HTTP ${r.status}. Likely a transient Real-Debrid issue.`);
       const batch = await r.json();
       if (!Array.isArray(batch) || batch.length === 0) break;
       all.push(...batch);

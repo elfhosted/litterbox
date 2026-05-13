@@ -155,10 +155,13 @@
     const r = await proxiedFetch(
       `/oauth/v2/device/code?client_id=${CLIENT_ID}&new_credentials=yes`
     );
-    if (r.status === 429) {
-      throw new Error("Real-Debrid is rate-limiting LitterBox right now (too many people signing in at once). Wait ~60s and try again.");
+    if (r.status === 451) {
+      throw new Error("Real-Debrid is blocking LitterBox's OAuth endpoint right now. Try the API token sign-in path above instead — it uses a different endpoint and may not be affected.");
     }
-    if (!r.ok) throw new Error(`device code start: ${r.status}`);
+    if (r.status === 429) {
+      throw new Error("Real-Debrid is rate-limiting LitterBox right now (too many people signing in at once). Wait ~60s and try again, or use the API token sign-in path above.");
+    }
+    if (!r.ok) throw new Error(`device code start: ${r.status}. This is likely a transient Real-Debrid issue.`);
     return r.json();
   }
 
@@ -378,8 +381,25 @@
           if (r.status === 401 || r.status === 403) {
             throw new Error("Real-Debrid rejected this token. Double-check you copied it correctly from real-debrid.com/apitoken.");
           }
+          if (r.status === 451) {
+            // 451 here = RD's WAF / IP-reputation rejecting our
+            // outbound. Surface the underlying error_code if it's in
+            // the body so the user (or us in support) can diagnose.
+            let detail = "";
+            try {
+              const text = await r.text();
+              const m = text.match(/"error_code"\s*:\s*(\d+)/);
+              if (m) detail = ` (RD error_code ${m[1]})`;
+            } catch {}
+            throw new Error(
+              `Real-Debrid is blocking LitterBox's request${detail}. This isn't a problem with your token — RD's WAF or IP-reputation filter is rejecting our outbound traffic. Try again in a few minutes, or report at github.com/elfhosted/litterbox/issues.`
+            );
+          }
+          if (r.status === 429) {
+            throw new Error("Real-Debrid is rate-limiting LitterBox right now (too many people signing in at once). Wait ~60s and try again.");
+          }
           if (!r.ok) {
-            throw new Error(`Validation failed: HTTP ${r.status}`);
+            throw new Error(`Validation failed: HTTP ${r.status}. This is likely a transient Real-Debrid issue, not a problem with your token.`);
           }
           // Store + redirect. No refresh_token / expiresAt for API
           // tokens (they don't rotate on RD's schedule).
