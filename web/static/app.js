@@ -150,13 +150,11 @@
       <div class="rd-block-banner">
         <p class="rd-block-title">⚠ Real-Debrid is blocking our IP right now.</p>
         <p>
-          RD's anti-abuse layer is rejecting requests from the egress
-          IPs we route through. We're actively working on a fix
-          (cleaner egress provider, dedicated RD app registration) —
-          but until that's in place, you can run LitterBox locally
-          from your own home IP, which RD isn't blocking. Same code,
-          same trust model (your token stays in your browser), no
-          proxy in the middle.
+          RD's anti-abuse layer is rejecting requests from our egress.
+          We're actively working on it — until that's resolved, you
+          can run LitterBox locally from your own home IP, which RD
+          isn't blocking. Same code, same trust model (your token
+          stays in your browser), no proxy in the middle.
         </p>
         <pre><code id="rd-block-cmd">docker run --rm -p 8080:8080 ghcr.io/elfhosted/litterbox:rolling</code></pre>
         <p>
