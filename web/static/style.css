@@ -699,3 +699,33 @@ details.detect-strip[open] summary {
 .signin-oauth-fallback[open] summary {
   margin-bottom: 0.5rem;
 }
+
+/* Banner rendered when RD's WAF / IP-reputation filter is blocking
+ * our egress. Surfaces the immediate self-service workaround
+ * (docker one-liner to run locally) instead of a dead-end error. */
+.rd-block-banner {
+  border-left: 4px solid var(--warn);
+  background: var(--card);
+  padding: 0.75rem 1rem;
+  border-radius: 0.25rem;
+  margin: 0.5rem 0;
+}
+.rd-block-banner .rd-block-title {
+  margin: 0 0 0.5rem;
+  color: var(--warn);
+  font-weight: 600;
+}
+.rd-block-banner pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.3rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.rd-block-banner pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+}

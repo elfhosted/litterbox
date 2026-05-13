@@ -136,6 +136,50 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+  // Sentinel error thrown by sign-in paths when RD's WAF rejects us
+  // with HTTP 451. The outer click handler catches this and renders
+  // a richer banner (with a docker one-liner) instead of the plain
+  // "Sign-in failed: ..." text.
+  const RD_BLOCKED_SENTINEL = "__RD_IP_BLOCKED__";
+
+  // Banner rendered into a status element when RD's IP-reputation
+  // filter is blocking us. Tells the user "this is not your fault,
+  // and here's the immediate workaround" in one place.
+  function renderRdBlockBanner(el) {
+    el.innerHTML = `
+      <div class="rd-block-banner">
+        <p class="rd-block-title">⚠ Real-Debrid is blocking our IP right now.</p>
+        <p>
+          RD's anti-abuse layer is rejecting requests from the egress
+          IPs we route through. We're actively working on a fix
+          (cleaner egress provider, dedicated RD app registration) —
+          but until that's in place, you can run LitterBox locally
+          from your own home IP, which RD isn't blocking. Same code,
+          same trust model (your token stays in your browser), no
+          proxy in the middle.
+        </p>
+        <pre><code id="rd-block-cmd">docker run --rm -p 8080:8080 ghcr.io/elfhosted/litterbox:rolling</code></pre>
+        <p>
+          <button type="button" class="muted" id="rd-block-copy">📋 Copy</button>
+          Then open <a href="http://localhost:8080" target="_blank" rel="noopener"><code>http://localhost:8080</code></a>.
+        </p>
+      </div>`;
+    const copyBtn = el.querySelector("#rd-block-copy");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        const cmd = el.querySelector("#rd-block-cmd").textContent;
+        try {
+          await navigator.clipboard.writeText(cmd);
+          const orig = copyBtn.textContent;
+          copyBtn.textContent = "✓ copied";
+          setTimeout(() => { copyBtn.textContent = orig; }, 1200);
+        } catch {
+          // Clipboard blocked; user can manually select + copy.
+        }
+      });
+    }
+  }
+
   // ============================================================
   // OAuth device-code flow.
   // ============================================================
@@ -156,7 +200,8 @@
       `/oauth/v2/device/code?client_id=${CLIENT_ID}&new_credentials=yes`
     );
     if (r.status === 451) {
-      throw new Error("Real-Debrid is blocking LitterBox's OAuth endpoint right now. Try the API token sign-in path above instead — it uses a different endpoint and may not be affected.");
+      // Outer click handler renders the local-fallback banner.
+      throw new Error(RD_BLOCKED_SENTINEL);
     }
     if (r.status === 429) {
       throw new Error("Real-Debrid is rate-limiting LitterBox right now (too many people signing in at once). Wait ~60s and try again, or use the API token sign-in path above.");
@@ -352,7 +397,11 @@
         try {
           await runDeviceAuthFlow(status);
         } catch (err) {
-          status.innerHTML = `<span class="warn">Sign-in failed:</span> ${escapeHTML(err.message)}`;
+          if (err.message === RD_BLOCKED_SENTINEL) {
+            renderRdBlockBanner(status);
+          } else {
+            status.innerHTML = `<span class="warn">Sign-in failed:</span> ${escapeHTML(err.message)}`;
+          }
           signinBtn.disabled = false;
         }
       });
@@ -382,18 +431,12 @@
             throw new Error("Real-Debrid rejected this token. Double-check you copied it correctly from real-debrid.com/apitoken.");
           }
           if (r.status === 451) {
-            // 451 here = RD's WAF / IP-reputation rejecting our
-            // outbound. Surface the underlying error_code if it's in
-            // the body so the user (or us in support) can diagnose.
-            let detail = "";
-            try {
-              const text = await r.text();
-              const m = text.match(/"error_code"\s*:\s*(\d+)/);
-              if (m) detail = ` (RD error_code ${m[1]})`;
-            } catch {}
-            throw new Error(
-              `Real-Debrid is blocking LitterBox's request${detail}. This isn't a problem with your token — RD's WAF or IP-reputation filter is rejecting our outbound traffic. Try again in a few minutes, or report at github.com/elfhosted/litterbox/issues.`
-            );
+            // RD's IP-reputation filter rejecting our egress. Render
+            // the local-fallback banner directly — much more useful
+            // than a wall of error text.
+            renderRdBlockBanner(status);
+            tokenBtn.disabled = false;
+            return;
           }
           if (r.status === 429) {
             throw new Error("Real-Debrid is rate-limiting LitterBox right now (too many people signing in at once). Wait ~60s and try again.");
