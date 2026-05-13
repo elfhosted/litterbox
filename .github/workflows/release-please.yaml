@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   release-please:
-    runs-on: arc-runners
+    # Public repo — GitHub-hosted runners are free and unblock us
+    # from the self-hosted arc-runner pool's queue.
+    runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
         with:
