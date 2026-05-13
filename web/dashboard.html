@@ -1224,67 +1224,73 @@
   // May-2026 regex flagged some torrents (filteredOnly > 0), a
   // sub-line surfaces that — RD's UI shows them as healthy, so
   // it's worth saying out loud.
+  // Templates are "stating my library's state right now" (neutral
+  // tense). The user might post these before clicking the wipe
+  // button or after — either way "X broken in my library" is a
+  // factual snapshot from the scan. CTA lines (with the URL) use
+  // imperative voice so they read as recommendations to the reader,
+  // not claims about what the user did.
   const SHARE_VENT = [
-    (s, st, bw, fl) => `${s.broken} broken/filtered torrents (${bw}, ${st.pct.toFixed(1)}% of my library) just got scooped out of my @realdebrid library${fl}.\n\n` +
+    (s, st, bw, fl) => `${s.broken} broken/filtered torrents (${bw}, ${st.pct.toFixed(1)}% of my library) in my @realdebrid library${fl}.\n\n` +
       `Stink rating: ${st.label} (${st.score}/10) 🦨\n\n` +
-      `Cleaned with LitterBox: https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `Took the trash out of my @realdebrid library: ${s.broken} broken/filtered torrents gone (${bw})${fl}.\n\n` +
-      `Stink rating: ${st.label} ${st.score}/10 → daisy-fresh ✨\n\n` +
-      `🐈‍⬛ https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `My @realdebrid library was ${st.pct.toFixed(1)}% rot by weight — ${s.broken} broken/filtered items, ${bw} of dead catalog${fl}.\n\n` +
-      `LitterBox scooped them in one click: https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `${st.label} (${st.score}/10) — that's what my @realdebrid library scored before LitterBox scooped out ${s.broken} broken/filtered torrents${fl}.\n\n` +
-      `https://litterbox.elfhosted.com 🐈‍⬛`,
-    (s, st, bw, fl) => `infringing_file errors everywhere in my @realdebrid library — LitterBox just cleaned out ${s.broken} of them (${bw}, ${st.pct.toFixed(1)}% of my catalog)${fl}.\n\n` +
+      `Scan + scoop with LitterBox: https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `Just audited my @realdebrid library: ${s.broken} broken/filtered torrents (${bw})${fl}.\n\n` +
+      `Stink rating: ${st.label} (${st.score}/10) 🦨\n\n` +
+      `🐈‍⬛ LitterBox: https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `My @realdebrid library is ${st.pct.toFixed(1)}% rot by weight — ${s.broken} broken/filtered items, ${bw} of dead catalog${fl}.\n\n` +
+      `LitterBox audits + scoops in one click: https://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `Stink rating ${st.label} (${st.score}/10) on my @realdebrid library — ${s.broken} broken/filtered torrents${fl}.\n\n` +
+      `Audit yours at https://litterbox.elfhosted.com 🐈‍⬛`,
+    (s, st, bw, fl) => `infringing_file errors everywhere in my @realdebrid library — LitterBox flagged ${s.broken} of them (${bw}, ${st.pct.toFixed(1)}% of my catalog)${fl}.\n\n` +
       `https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `Working Monday, broken now: ${s.broken} torrents in my @realdebrid library scooped by LitterBox${fl}.\n\n` +
+    (s, st, bw, fl) => `Working Monday, broken now: ${s.broken} torrents in my @realdebrid library flagged by LitterBox${fl}.\n\n` +
       `Stink rating: ${st.label} (${st.score}/10)\nhttps://litterbox.elfhosted.com 🐈‍⬛`,
-    (s, st, bw, fl) => `Post-rug-pull cleanup: ${s.broken} dead/filtered torrents (${bw}) out of my @realdebrid library${fl}.\n\n` +
-      `${st.label} ${st.score}/10 → 🌸 clean.\nhttps://litterbox.elfhosted.com`,
+    (s, st, bw, fl) => `Post-rug-pull audit: ${s.broken} dead/filtered torrents (${bw}) found in my @realdebrid library${fl}.\n\n` +
+      `${st.label} ${st.score}/10. Run yours with LitterBox: https://litterbox.elfhosted.com`,
   ];
   const SHARE_TOOL = [
-    (s, st, bw, fl) => `🐈‍⬛ Just used LitterBox to scoop ${s.broken} broken / filtered torrents out of my Real-Debrid library in one click. ` +
+    (s, st, bw, fl) => `🐈‍⬛ LitterBox flagged ${s.broken} broken / filtered torrents in my Real-Debrid library — one-click cleanup. ` +
       `Free, open-source, OAuth sign-in (no API key entry), browser-only token storage, detects the May 2026 "infringing_file" class.\n\n` +
       `https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `LitterBox 🐈‍⬛ — spring-cleaned my Real-Debrid library in one click. ${s.broken} broken/filtered items scooped (${bw}). ` +
+    (s, st, bw, fl) => `LitterBox 🐈‍⬛ — audits your Real-Debrid library in one click. Found ${s.broken} broken/filtered items (${bw}) in mine. ` +
       `Free, OSS, OAuth sign-in, token stays in your browser, detects the May 2026 filter class that RD's UI hides.\n\n` +
       `https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `If your Real-Debrid library is full of infringing_file errors, try LitterBox 🐈‍⬛ — OAuth sign-in, no API key, no server-side storage. ` +
-      `Caught ${s.broken} broken/filtered torrents in mine.\n\n` +
+    (s, st, bw, fl) => `If your Real-Debrid library has infringing_file errors, try LitterBox 🐈‍⬛ — OAuth sign-in, no API key, no server-side storage. ` +
+      `Found ${s.broken} broken/filtered torrents in mine.\n\n` +
       `https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `RD's official UI won't show you which torrents got hit by the May 2026 filter. LitterBox does — pulled ${s.broken} broken/filtered ones out of my library just now. ` +
+    (s, st, bw, fl) => `RD's official UI won't show which torrents got hit by the May 2026 filter. LitterBox does — flagged ${s.broken} broken/filtered ones in my library. ` +
       `Free, OSS, browser-only auth.\n\n` +
       `https://litterbox.elfhosted.com 🐈‍⬛`,
-    (s, st, bw, fl) => `Spring-cleaning my Real-Debrid library after the May 2026 rug-pull. ${s.broken} dead/filtered torrents scooped with LitterBox 🐈‍⬛ — free, open-source, no API key entry. ` +
+    (s, st, bw, fl) => `Auditing my Real-Debrid library after the May 2026 rug-pull. LitterBox 🐈‍⬛ flagged ${s.broken} dead/filtered torrents — free, open-source, no API key entry. ` +
       `Your token never leaves your browser.\n\n` +
       `https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `Found LitterBox 🐈‍⬛ — OAuth into Real-Debrid, one click, bulk-deletes the broken/filtered debris. Just cleared ${s.broken} items (${bw}) out of my library. ` +
+    (s, st, bw, fl) => `Found LitterBox 🐈‍⬛ — OAuth into Real-Debrid, audits + bulk-deletes the broken/filtered debris. ${s.broken} items (${bw}) flagged in mine. ` +
       `OSS, browser-only auth.\n\n` +
       `https://litterbox.elfhosted.com`,
-    (s, st, bw, fl) => `Real-Debrid library checkup with LitterBox 🐈‍⬛: ${s.broken} broken/filtered → scooped, ${st.label} → daisy-fresh. ` +
+    (s, st, bw, fl) => `Real-Debrid library checkup with LitterBox 🐈‍⬛: ${s.broken} broken/filtered, ${st.label}. ` +
       `Browser-only OAuth, no API key, no server-side data, fully open-source.\n\n` +
       `https://litterbox.elfhosted.com`,
   ];
   const SHARE_ELFHOSTED = [
-    (s, st, bw, fl) => `My @realdebrid library had ${s.broken} broken torrents${fl}. Scooped with LitterBox 🧹\n\n` +
+    (s, st, bw, fl) => `${s.broken} broken torrents in my @realdebrid library${fl}. Audit + cleanup with LitterBox 🧹\n\n` +
       `Looking into @elfhosted's CatBox personal media stacks to migrate from Real-Debrid to @torbox — keeps the library intact, no more RD filter drama.\n` +
       `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
-    (s, st, bw, fl) => `Just scooped ${s.broken} broken torrents out of my @realdebrid library with LitterBox 🐈‍⬛\n\n` +
+    (s, st, bw, fl) => `Audited my @realdebrid library with LitterBox 🐈‍⬛ — ${s.broken} broken torrents flagged.\n\n` +
       `Next step: migrating from Real-Debrid to @torbox via @elfhosted's CatBox personal media stacks — API and policy compliant, endorsed by @torbox, library transitions across instead of getting binned.\n` +
       `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
-    (s, st, bw, fl) => `LitterBox caught ${s.broken} broken/filtered items in my @realdebrid library${fl}. ` +
+    (s, st, bw, fl) => `LitterBox flagged ${s.broken} broken/filtered items in my @realdebrid library${fl}. ` +
       `Cleanup is the band-aid; @elfhosted's CatBox personal media stacks are the structural answer — migrate from Real-Debrid to @torbox with the library intact.\n` +
       `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
-    (s, st, bw, fl) => `${s.broken} broken/filtered torrents (${bw}) gone from my @realdebrid library, courtesy of LitterBox. ` +
+    (s, st, bw, fl) => `${s.broken} broken/filtered torrents (${bw}) in my @realdebrid library, courtesy of LitterBox audit. ` +
       `But the rug-pulls keep coming — looking at @elfhosted's CatBox personal media stacks to migrate from Real-Debrid to @torbox without losing what still works.\n` +
       `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
-    (s, st, bw, fl) => `WEB-DL is cooked on @realdebrid. LitterBox scooped ${s.broken} broken/filtered torrents from my library; ` +
+    (s, st, bw, fl) => `WEB-DL is cooked on @realdebrid. LitterBox flagged ${s.broken} broken/filtered torrents in my library; ` +
       `@elfhosted's CatBox personal media stacks can migrate the survivors from Real-Debrid to @torbox — API and policy compliant, endorsed by @torbox. Same Sonarr/Radarr setup.\n` +
       `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
-    (s, st, bw, fl) => `Real-Debrid library tanked ${st.pct.toFixed(1)}% by weight — ${s.broken} torrents binned with LitterBox 🐈‍⬛. ` +
+    (s, st, bw, fl) => `Real-Debrid library is ${st.pct.toFixed(1)}% rot by weight — ${s.broken} torrents flagged by LitterBox 🐈‍⬛. ` +
       `Migrating from Real-Debrid to @torbox via @elfhosted's CatBox personal media stacks to stop bleeding catalog (library transitions across; endorsed by @torbox).\n` +
       `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
-    (s, st, bw, fl) => `Cleaned ${s.broken} broken/filtered items out of my @realdebrid library with LitterBox today${fl}. ` +
+    (s, st, bw, fl) => `${s.broken} broken/filtered items in my @realdebrid library, surfaced by LitterBox audit today${fl}. ` +
       `Seriously considering @elfhosted's CatBox personal media stacks — migrate from Real-Debrid to @torbox, library intact, no more wondering what'll vanish next.\n` +
       `https://store.elfhosted.com/product-category/personal-stacks/personal-media-stacks/?utm_source=litterbox&utm_medium=tweet&utm_campaign=rd-migration`,
   ];
