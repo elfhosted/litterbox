@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/elfhosted/litterbox/compare/1.2.0...1.3.0) (2026-05-13)
+
+
+### Features
+
+* **auth:** API-token sign-in path + WAF prefix strip (PR [#7](https://github.com/elfhosted/litterbox/issues/7) partial) ([39f64cc](https://github.com/elfhosted/litterbox/commit/39f64cc1ab60f131d8b4ddb1961c19227ecce386))
+
 ## [1.2.0](https://github.com/elfhosted/litterbox/compare/1.1.1...1.2.0) (2026-05-13)
 
 
