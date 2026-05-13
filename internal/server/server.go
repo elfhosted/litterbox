@@ -35,13 +35,15 @@ type Server struct {
 // New constructs the HTTP server. webRoot is the filesystem
 // containing the static assets (typically an embed.FS rooted at
 // web/ — declared in main.go so the embed directive resolves
-// relative to the project root).
+// relative to the project root). version is the release-please
+// manifest value embedded at build time, served via /api/version
+// for the frontend's header chip.
 //
 // The server is intentionally minimal: a CORS-bypass proxy for the
-// RD API, a healthz probe, and the embedded static SPA. No
-// server-side state — all pattern data lives in the user's browser
-// localStorage.
-func New(log *slog.Logger, webRoot fs.FS) (*Server, error) {
+// RD API, a healthz probe, a version endpoint, and the embedded
+// static SPA. No server-side state — all pattern data lives in the
+// user's browser localStorage.
+func New(log *slog.Logger, webRoot fs.FS, version string) (*Server, error) {
 	mux := http.NewServeMux()
 
 	// /api/proxy — RD CORS workaround. See internal/proxy for the
@@ -49,6 +51,14 @@ func New(log *slog.Logger, webRoot fs.FS) (*Server, error) {
 	proxyHandler := proxy.New(log)
 	mux.Handle("/api/proxy", proxyHandler)
 	mux.Handle("/api/proxy/", proxyHandler)
+
+	// /api/version — plain text; fetched by the SPA on load to
+	// render the version chip in the header.
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write([]byte(version))
+	})
 
 	// /healthz — k8s probe.
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {

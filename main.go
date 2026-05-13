@@ -25,6 +25,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -46,6 +47,26 @@ import (
 //go:embed all:web
 var staticFS embed.FS
 
+// manifestJSON pulls the release-please manifest into the binary so
+// /api/version can serve whatever version was current at build time
+// without needing ldflag plumbing. release-please bumps this file
+// before tagging, so a binary built from a release tag carries the
+// matching version automatically.
+//
+//go:embed .release-please-manifest.json
+var manifestJSON []byte
+
+func readVersion() string {
+	var m map[string]string
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		return "dev"
+	}
+	if v, ok := m["."]; ok && v != "" {
+		return v
+	}
+	return "dev"
+}
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -59,11 +80,13 @@ func main() {
 		log.Error("embed sub failed", "err", err)
 		os.Exit(1)
 	}
-	srv, err := server.New(log, webRoot)
+	version := readVersion()
+	srv, err := server.New(log, webRoot, version)
 	if err != nil {
 		log.Error("server init failed", "err", err)
 		os.Exit(1)
 	}
+	log.Info("litterbox starting", "version", version)
 
 	httpSrv := &http.Server{
 		Addr:              addr,

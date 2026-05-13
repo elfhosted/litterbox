@@ -300,8 +300,25 @@
     header.appendChild(a);
   }
 
+  // Best-effort version fetch — populates the #app-version chip in
+  // the header on every page. Server bakes the value in from the
+  // release-please manifest at build time. Silent on failure (dev
+  // build serving without /api/version, transient outage, etc.).
+  async function mountVersion() {
+    const el = document.getElementById("app-version");
+    if (!el) return;
+    try {
+      const r = await fetch("/api/version", { cache: "no-store" });
+      if (!r.ok) return;
+      const v = (await r.text()).trim();
+      if (!v) return;
+      el.textContent = `v${v}`;
+    } catch (_) { /* swallow */ }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     mountSignout();
+    mountVersion();
 
     // Landing page: if already signed in, skip straight to dashboard.
     const signinBtn = document.getElementById("signin-button");

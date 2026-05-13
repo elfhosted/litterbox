@@ -41,6 +41,20 @@ header h1 {
   font-size: 1.75rem;
 }
 
+/* Version chip rendered next to the logo. Populated client-side
+ * from /api/version, which bakes the release-please manifest value
+ * into the binary at build time. Empty if the fetch fails or the
+ * version is "dev" — no UI fallback needed; the chip just stays
+ * blank and the header still reads cleanly. */
+.app-version {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 400;
+  vertical-align: middle;
+  padding-left: 0.35rem;
+  letter-spacing: 0.03em;
+}
+
 /* Logo link — clicking the cat returns the user to /, which the
  * landing-page handler redirects straight to /dashboard.html when
  * a token is in localStorage. Effectively "back to home base". No
