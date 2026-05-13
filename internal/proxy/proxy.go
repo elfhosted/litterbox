@@ -24,17 +24,24 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"hash/fnv"
 	"io"
 	"log/slog"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	utls "github.com/refraction-networking/utls"
 )
 
 // allowedHosts is the set of hostnames the proxy will forward to.
@@ -45,6 +52,95 @@ import (
 // allowlist entry.
 var allowedHosts = map[string]bool{
 	"api.real-debrid.com": true,
+}
+
+// makeUTLSDialTLS returns a DialTLSContext for http.Transport that
+// performs the TLS handshake with a Chrome-shaped ClientHello via
+// uTLS instead of Go's distinctive crypto/tls fingerprint. RD's WAF
+// distinguishes Go's TLS fingerprint from a real browser's — and
+// when a token is used over the Go-TLS path it gets per-token
+// flagged, even from a clean IP. Mimicking Chrome puts us on the
+// "real client" path that RD lets through.
+//
+// If proxyURL is non-nil, the dialer tunnels through it: TCP-dial
+// the proxy, send a CONNECT for the target host:port, then perform
+// the uTLS handshake over the established tunnel. We do CONNECT
+// ourselves rather than rely on http.Transport.Proxy because the
+// standard transport's CONNECT path uses crypto/tls directly and
+// bypasses DialTLSContext, so uTLS would never run.
+//
+// HTTP/2 is disabled at the Transport level (TLSNextProto empty)
+// because Go's http2 package requires *tls.Conn, not utls.UConn.
+// We also patch the ALPN extension to advertise only http/1.1 (real
+// Chrome advertises h2 too, but RD's WAF hasn't shown it inspects
+// ALPN contents specifically). RD's REST API works fine over HTTP/1.1.
+func makeUTLSDialTLS(proxyURL *url.URL) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		var d net.Dialer
+		var rawConn net.Conn
+		var err error
+
+		if proxyURL == nil {
+			rawConn, err = d.DialContext(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// Dial the proxy.
+			proxyHost := proxyURL.Host
+			if proxyURL.Port() == "" {
+				if proxyURL.Scheme == "https" {
+					proxyHost += ":443"
+				} else {
+					proxyHost += ":80"
+				}
+			}
+			rawConn, err = d.DialContext(ctx, "tcp", proxyHost)
+			if err != nil {
+				return nil, err
+			}
+			// Build CONNECT request for the eventual target.
+			connectReq := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", addr, addr)
+			if u := proxyURL.User; u != nil {
+				password, _ := u.Password()
+				auth := base64.StdEncoding.EncodeToString([]byte(u.Username() + ":" + password))
+				connectReq += "Proxy-Authorization: Basic " + auth + "\r\n"
+			}
+			connectReq += "\r\n"
+			if _, err := rawConn.Write([]byte(connectReq)); err != nil {
+				rawConn.Close()
+				return nil, err
+			}
+			br := bufio.NewReader(rawConn)
+			resp, err := http.ReadResponse(br, &http.Request{Method: "CONNECT"})
+			if err != nil {
+				rawConn.Close()
+				return nil, err
+			}
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				rawConn.Close()
+				return nil, fmt.Errorf("proxy CONNECT %s: %s", addr, resp.Status)
+			}
+		}
+
+		host, _, _ := net.SplitHostPort(addr)
+		uConn := utls.UClient(rawConn, &utls.Config{ServerName: host}, utls.HelloChrome_Auto)
+		if err := uConn.BuildHandshakeState(); err != nil {
+			rawConn.Close()
+			return nil, err
+		}
+		for _, ext := range uConn.Extensions {
+			if alpn, ok := ext.(*utls.ALPNExtension); ok {
+				alpn.AlpnProtocols = []string{"http/1.1"}
+			}
+		}
+		if err := uConn.HandshakeContext(ctx); err != nil {
+			rawConn.Close()
+			return nil, err
+		}
+		return uConn, nil
+	}
 }
 
 // upstreamTimeout caps each forwarded request. 30s gives RD's slower
@@ -80,12 +176,19 @@ type Handler struct {
 // similar (StremThru's recent move) without a rebuild.
 func New(log *slog.Logger, outboundProxies []string, overrideUserAgent string) *Handler {
 	clients := make([]*http.Client, 0, max(1, len(outboundProxies)))
+	// Common transport options: HTTP/2 disabled because Go's http2 needs
+	// *tls.Conn and our DialTLSContext returns *utls.UConn. RD handles
+	// HTTP/1.1 fine.
+	newTransport := func(proxyURL *url.URL) *http.Transport {
+		return &http.Transport{
+			DialTLSContext:    makeUTLSDialTLS(proxyURL),
+			ForceAttemptHTTP2: false,
+			TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{},
+		}
+	}
 	if len(outboundProxies) == 0 {
-		// No client-level Timeout: that would cap the whole request
-		// including body read time. Use per-request
-		// context.WithTimeout instead so the budget is explicit and
-		// visible in tracing.
-		clients = append(clients, &http.Client{})
+		// Direct uTLS-enabled client.
+		clients = append(clients, &http.Client{Transport: newTransport(nil)})
 	} else {
 		for _, raw := range outboundProxies {
 			raw = strings.TrimSpace(raw)
@@ -97,11 +200,11 @@ func New(log *slog.Logger, outboundProxies []string, overrideUserAgent string) *
 				log.Warn("proxy: skipping invalid outbound proxy URL", "raw", raw, "err", err)
 				continue
 			}
-			clients = append(clients, &http.Client{
-				Transport: &http.Transport{
-					Proxy: http.ProxyURL(pu),
-				},
-			})
+			// Each proxied client does its own CONNECT + uTLS handshake
+			// via makeUTLSDialTLS; we deliberately do NOT set
+			// Transport.Proxy because that path uses crypto/tls and
+			// bypasses DialTLSContext.
+			clients = append(clients, &http.Client{Transport: newTransport(pu)})
 		}
 		if len(clients) == 0 {
 			log.Warn("proxy: OUTBOUND_PROXIES set but no usable URLs; falling back to direct")
