@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/elfhosted/litterbox/compare/1.7.0...1.8.0) (2026-05-13)
+
+
+### Features
+
+* **ui:** make OAuth the primary sign-in, API token the fallback ([d3f6c2a](https://github.com/elfhosted/litterbox/commit/d3f6c2a42f165e06d178e311684f7107055804cc))
+
 ## [1.7.0](https://github.com/elfhosted/litterbox/compare/1.6.0...1.7.0) (2026-05-13)
 
 
