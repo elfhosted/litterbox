@@ -27,6 +27,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"hash/fnv"
 	"io"
 	"log/slog"
 	"math/rand"
@@ -113,14 +114,32 @@ func New(log *slog.Logger, outboundProxies []string, overrideUserAgent string) *
 	return &Handler{log: log, clients: clients, overrideUserAgent: overrideUserAgent}
 }
 
-// pickClient returns one of the configured outbound clients at
-// random. With a single direct client this is constant; with N
-// proxy clients it spreads load across the configured pool.
-func (h *Handler) pickClient() *http.Client {
+// pickClient returns the outbound client for this request. When an
+// Authorization header is present, the choice is *deterministic*:
+// hash(authHeader) % N. Same token → same egress, every time.
+//
+// Rationale: RD's anti-abuse layer flags tokens used from many IPs
+// in a short window — looks like credential theft to them. Random
+// per-request egress selection (the previous behavior) accelerated
+// that flagging, because a single user's sign-in + dashboard would
+// touch N different proxybase IPs per minute. Sticky-per-token
+// gives RD a consistent IP per user-token, which is what they
+// expect for normal traffic. Load still spreads because different
+// users' tokens hash to different egresses.
+//
+// Anonymous requests (no Authorization header) fall back to random
+// pick — there's no token to anchor the hash to and nothing to
+// burn either.
+func (h *Handler) pickClient(authHeader string) *http.Client {
 	if len(h.clients) == 1 {
 		return h.clients[0]
 	}
-	return h.clients[rand.Intn(len(h.clients))]
+	if authHeader == "" {
+		return h.clients[rand.Intn(len(h.clients))]
+	}
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(authHeader))
+	return h.clients[hash.Sum32()%uint32(len(h.clients))]
 }
 
 // ServeHTTP forwards one browser request to RD.
@@ -170,17 +189,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Body.Close()
 	}
 
-	// Retry-on-failure: when more than one outbound client is
-	// configured, retry on transport error or HTTP 451 (RD's WAF/IP-
-	// reputation rejection — the bad-IP signal). proxybase rotates
-	// the backing IP per sticky-token, and ~half the draws land on
-	// flagged IPs; one retry takes the success rate from ~95% to
-	// near-100% empirically. Skip retry when only one client is
-	// configured — there's no "different egress" to retry through.
+	// Retry only on transport errors (proxy hiccups, dropped TCP).
+	// Do NOT retry on HTTP 451: that's RD's anti-abuse signal, and
+	// retrying with a different egress IP makes the same token
+	// authenticate from N different IPs in seconds — which is
+	// exactly the credential-theft pattern RD's heuristic flags.
+	// We were burning user tokens within one sign-in attempt that
+	// way. Empirical confirmation: a single sign-in with retry=3
+	// took a freshly-regenerated RD API token from "200 OK from any
+	// IP" to "451 from every IP" in under 10 seconds.
 	maxAttempts := 1
 	if len(h.clients) > 1 {
 		maxAttempts = 3
 	}
+	authHeader := r.Header.Get("Authorization")
 	var resp *http.Response
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		var bodyReader io.Reader
@@ -216,23 +238,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		resp, err = h.pickClient().Do(upstream)
+		resp, err = h.pickClient(authHeader).Do(upstream)
 		if attempt >= maxAttempts {
 			break
 		}
 		if err != nil {
 			h.log.Info("proxy: transport error, retrying with different egress",
 				"attempt", attempt, "host", target.Host, "path", target.Path, "err", err)
-			continue
-		}
-		if resp.StatusCode == 451 {
-			// 451 = RD's WAF/IP-reputation block. Different egress
-			// IP probably gets through. Drain + close the body so the
-			// underlying connection can be reused.
-			io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
-			h.log.Info("proxy: upstream 451, retrying with different egress",
-				"attempt", attempt, "host", target.Host, "path", target.Path)
 			continue
 		}
 		break
