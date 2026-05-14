@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/elfhosted/litterbox/compare/1.8.0...1.8.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* **proxy:** randomize TLS fingerprint by default (RD now blocks Chrome uTLS) ([4b6e02c](https://github.com/elfhosted/litterbox/commit/4b6e02c459aa881c7f7cee47f6da021fdb6386f0))
+
 ## [1.8.0](https://github.com/elfhosted/litterbox/compare/1.7.0...1.8.0) (2026-05-13)
 
 
