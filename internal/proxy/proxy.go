@@ -54,13 +54,46 @@ var allowedHosts = map[string]bool{
 	"api.real-debrid.com": true,
 }
 
+// parseTLSFingerprint maps an env-var string to a utls ClientHelloID.
+// Defaults to HelloRandomized when the value is empty or unknown.
+//
+// RD's WAF has demonstrably catalogued the well-known desktop browser
+// uTLS fingerprints — Chrome_Auto, Chrome_120, Chrome_100,
+// Firefox_120, Safari_16_0 all 451 on the CONNECT-tunneled path while
+// iOS_14 and Randomized pass. Empirical A/B as of 2026-05-14. We
+// default to Randomized so each connection gets a unique-enough
+// ClientHello that RD can't match against a fixed pattern; an env
+// var override lets us pivot quickly when RD inevitably adapts.
+func parseTLSFingerprint(s string) utls.ClientHelloID {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "randomized", "random":
+		return utls.HelloRandomized
+	case "ios", "ios_14":
+		return utls.HelloIOS_14
+	case "chrome", "chrome_auto":
+		return utls.HelloChrome_Auto
+	case "chrome_120":
+		return utls.HelloChrome_120
+	case "chrome_100":
+		return utls.HelloChrome_100
+	case "firefox", "firefox_120":
+		return utls.HelloFirefox_120
+	case "safari", "safari_16":
+		return utls.HelloSafari_16_0
+	default:
+		return utls.HelloRandomized
+	}
+}
+
 // makeUTLSDialTLS returns a DialTLSContext for http.Transport that
-// performs the TLS handshake with a Chrome-shaped ClientHello via
-// uTLS instead of Go's distinctive crypto/tls fingerprint. RD's WAF
+// performs the TLS handshake using a uTLS-mimicked ClientHello
+// instead of Go's distinctive crypto/tls fingerprint. RD's WAF
 // distinguishes Go's TLS fingerprint from a real browser's — and
-// when a token is used over the Go-TLS path it gets per-token
-// flagged, even from a clean IP. Mimicking Chrome puts us on the
-// "real client" path that RD lets through.
+// has further fingerprinted all the obvious uTLS "look like a
+// browser" profiles. We use HelloRandomized by default (each
+// connection gets a different fingerprint, no fixed pattern to
+// blocklist). Operator can pin a specific profile via the
+// OUTBOUND_TLS_FINGERPRINT env var.
 //
 // If proxyURL is non-nil, the dialer tunnels through it: TCP-dial
 // the proxy, send a CONNECT for the target host:port, then perform
@@ -71,10 +104,9 @@ var allowedHosts = map[string]bool{
 //
 // HTTP/2 is disabled at the Transport level (TLSNextProto empty)
 // because Go's http2 package requires *tls.Conn, not utls.UConn.
-// We also patch the ALPN extension to advertise only http/1.1 (real
-// Chrome advertises h2 too, but RD's WAF hasn't shown it inspects
-// ALPN contents specifically). RD's REST API works fine over HTTP/1.1.
-func makeUTLSDialTLS(proxyURL *url.URL) func(ctx context.Context, network, addr string) (net.Conn, error) {
+// We also patch the ALPN extension to advertise only http/1.1.
+// RD's REST API works fine over HTTP/1.1.
+func makeUTLSDialTLS(proxyURL *url.URL, helloID utls.ClientHelloID) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		var d net.Dialer
 		var rawConn net.Conn
@@ -125,7 +157,7 @@ func makeUTLSDialTLS(proxyURL *url.URL) func(ctx context.Context, network, addr 
 		}
 
 		host, _, _ := net.SplitHostPort(addr)
-		uConn := utls.UClient(rawConn, &utls.Config{ServerName: host}, utls.HelloChrome_Auto)
+		uConn := utls.UClient(rawConn, &utls.Config{ServerName: host}, helloID)
 		if err := uConn.BuildHandshakeState(); err != nil {
 			rawConn.Close()
 			return nil, err
@@ -174,14 +206,15 @@ type Handler struct {
 // extends from app-fingerprint matching ("litterbox/X.Y.Z" → 451) to
 // broader UA filtering — operator can flip to "curl/8.7.1" or
 // similar (StremThru's recent move) without a rebuild.
-func New(log *slog.Logger, outboundProxies []string, overrideUserAgent string) *Handler {
+func New(log *slog.Logger, outboundProxies []string, overrideUserAgent string, tlsFingerprint string) *Handler {
 	clients := make([]*http.Client, 0, max(1, len(outboundProxies)))
+	helloID := parseTLSFingerprint(tlsFingerprint)
 	// Common transport options: HTTP/2 disabled because Go's http2 needs
 	// *tls.Conn and our DialTLSContext returns *utls.UConn. RD handles
 	// HTTP/1.1 fine.
 	newTransport := func(proxyURL *url.URL) *http.Transport {
 		return &http.Transport{
-			DialTLSContext:    makeUTLSDialTLS(proxyURL),
+			DialTLSContext:    makeUTLSDialTLS(proxyURL, helloID),
 			ForceAttemptHTTP2: false,
 			TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{},
 		}
@@ -213,7 +246,8 @@ func New(log *slog.Logger, outboundProxies []string, overrideUserAgent string) *
 	}
 	log.Info("proxy: outbound transport configured",
 		"client_count", len(clients),
-		"user_agent_override", overrideUserAgent != "")
+		"user_agent_override", overrideUserAgent != "",
+		"tls_fingerprint", helloID.Str())
 	return &Handler{log: log, clients: clients, overrideUserAgent: overrideUserAgent}
 }
 

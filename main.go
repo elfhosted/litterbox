@@ -111,6 +111,13 @@ func main() {
 	// any time). See StremThru's switch to "curl/8.7.1" for prior art.
 	outboundUA := os.Getenv("OUTBOUND_USER_AGENT")
 
+	// OUTBOUND_TLS_FINGERPRINT — uTLS ClientHello to emit on outbound
+	// TLS handshakes. Default "randomized" gives each connection a
+	// unique-ish fingerprint to evade RD's known-fingerprint blocklist.
+	// Supported: randomized, ios_14, chrome (and chrome_120/_100),
+	// firefox, safari. See parseTLSFingerprint in internal/proxy.
+	tlsFingerprint := os.Getenv("OUTBOUND_TLS_FINGERPRINT")
+
 	cfg := server.Config{
 		Version: readVersion(),
 		// REDDIT_MEGATHREAD_URL — operator-rotatable per release cycle.
@@ -126,7 +133,7 @@ func main() {
 		RDBlockedFilenameRegex: envOr("RD_BLOCKED_FILENAME_REGEX",
 			`\[(rartv|rarbg|eztv)\]|\b(YTS|Erai-raws|CR)\b|(WEB-?Rip|WEB-?DL|AMZN|DSNP)`),
 	}
-	srv, err := server.New(log, webRoot, cfg, outboundProxies, outboundUA)
+	srv, err := server.New(log, webRoot, cfg, outboundProxies, outboundUA, tlsFingerprint)
 	if err != nil {
 		log.Error("server init failed", "err", err)
 		os.Exit(1)
