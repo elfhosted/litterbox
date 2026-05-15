@@ -1054,10 +1054,79 @@
   async function scanLibrary(onProgress) {
     const all = [];
     let page = 1;
+    // proxiedFetch already retries network errors 6 times (~123s of
+    // exponential backoff), but a 70k-torrent library is 700+ sequential
+    // pages — at that scale a single transient blip on ONE page is
+    // statistically near-certain (proxy session rollover, residential
+    // IP momentary blacklist, browser tab throttling spike, etc.) and
+    // shouldn't throw away minutes of accumulated scan progress.
+    //
+    // Outer page-level retry: if proxiedFetch exhausts its budget on a
+    // page, sleep 30s and try the same page once more. After that we
+    // surface the error with context (page #, count so far) so the
+    // user knows the scan didn't silently lose everything.
+    const PAGE_RETRY_PAUSE_MS = 30_000;
+    const PAGE_RETRY_LIMIT = 2;
+
+    const fetchPage = (n, retryHook) => window.litterbox.proxiedFetch(
+      `/rest/1.0/torrents?limit=100&page=${n}`,
+      { onRetry: retryHook }
+    );
+
+    // A page is "retryable" when proxiedFetch threw (network error /
+    // timeout) OR when it returned a response after exhausting its
+    // own retry budget on a transient status (429 / 5xx). Both arise
+    // from the same kind of upstream blip — distinguishing them in
+    // the outer loop would just duplicate the inner gating.
+    const isRetryableStatus = (status) =>
+      status === 429 || (status >= 500 && status < 600);
+
     while (true) {
-      const r = await window.litterbox.proxiedFetch(
-        `/rest/1.0/torrents?limit=100&page=${page}`
-      );
+      let r;
+      let pageAttempt = 0;
+      let lastErr = null;
+      while (true) {
+        let threw = false;
+        try {
+          r = await fetchPage(page, ({ reason, attempt, backoffMs }) => {
+            // Surface in-flight backoff to the UI so a long retry pause
+            // doesn't look like a frozen scan. The next onProgress call
+            // (on the next successful page) overwrites it.
+            const secs = Math.round(backoffMs / 1000);
+            $("scan-detail").textContent =
+              `${all.length} torrents inspected — Real-Debrid hiccup, retrying in ${secs}s (try ${attempt + 1})`;
+          });
+        } catch (e) {
+          threw = true;
+          lastErr = e;
+        }
+        // Success path: response with a non-retryable status — break
+        // out and let the status handlers below decide what to do.
+        if (!threw && !isRetryableStatus(r.status)) break;
+        // Failure path: either we threw (network / timeout) or we
+        // got a response on a transient status after proxiedFetch
+        // exhausted its budget. Same recovery either way.
+        if (pageAttempt >= PAGE_RETRY_LIMIT) {
+          if (threw) {
+            const tail = all.length > 0
+              ? ` (${all.length} torrents scanned before the failure — rescan to retry)`
+              : "";
+            throw new Error(`Scan stalled on page ${page} after ${pageAttempt + 1} attempts: ${lastErr.message}${tail}`);
+          }
+          // Response with retryable status: fall through to the
+          // existing 429 / !r.ok handlers — they emit
+          // domain-specific messages ("rate-limited", "HTTP 503").
+          break;
+        }
+        pageAttempt++;
+        const waitSecs = Math.round(PAGE_RETRY_PAUSE_MS / 1000);
+        const cause = threw
+          ? "stalled"
+          : `HTTP ${r.status}`;
+        $("scan-detail").textContent =
+          `${all.length} torrents inspected — page ${page} ${cause}, retrying in ${waitSecs}s (try ${pageAttempt + 1}/${PAGE_RETRY_LIMIT + 1})`;
+        await new Promise((resolve) => setTimeout(resolve, PAGE_RETRY_PAUSE_MS));
+      }
       if (r.status === 401 || r.status === 403) {
         localStorage.clear();
         window.location.href = "/";
