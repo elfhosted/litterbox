@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/elfhosted/litterbox/compare/1.8.1...1.8.2) (2026-05-15)
+
+
+### Bug Fixes
+
+* **ui:** retry transient page failures during library scan ([#21](https://github.com/elfhosted/litterbox/issues/21)) ([9c74c97](https://github.com/elfhosted/litterbox/commit/9c74c97b1f1a65c219382388ed14cc74f5c8473f))
+
 ## [1.8.1](https://github.com/elfhosted/litterbox/compare/1.8.0...1.8.1) (2026-05-14)
 
 
