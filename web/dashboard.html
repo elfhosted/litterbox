@@ -20,29 +20,26 @@
     <summary>🔬 LitterBox detects these filename patterns out of the box <span class="muted small">(click to expand)</span></summary>
     <div class="regex-chips">
       <div class="chip-group">
-        <p class="chip-group-label">Bracket-tagged groups</p>
-        <span class="chip">[rartv]</span>
-        <span class="chip">[rarbg]</span>
-        <span class="chip">[eztv]</span>
+        <p class="chip-group-label">Source substrings (anywhere in filename)</p>
+        <span class="chip">web-dl</span>
+        <span class="chip">webrip</span>
+        <span class="chip">bdrip</span>
+        <span class="chip">hdrip</span>
+        <span class="chip">dvdrip</span>
       </div>
       <div class="chip-group">
-        <p class="chip-group-label">Scene release names</p>
-        <span class="chip">YTS</span>
-        <span class="chip">Erai-raws</span>
-        <span class="chip">CR</span>
-      </div>
-      <div class="chip-group">
-        <p class="chip-group-label">Source markers</p>
-        <span class="chip">WEB-DL</span>
-        <span class="chip">WEBDL</span>
-        <span class="chip">WEB-Rip</span>
-        <span class="chip">WEBRip</span>
-        <span class="chip">AMZN</span>
-        <span class="chip">DSNP</span>
+        <p class="chip-group-label">Source.Codec dot-adjacency</p>
+        <span class="chip">BluRay.x264</span>
+        <span class="chip">HDTV.x264</span>
+        <span class="chip">HDTV.XviD</span>
+        <span class="chip">WEB.x264</span>
+        <span class="chip">WEB.h264</span>
       </div>
     </div>
     <p class="muted small">
-      Fast-pass detection. The deep-probe step below catches the long tail.
+      Fast-pass detection — the exact 2-rule set RD's "infringing_file" filter blocks on,
+      <a href="https://www.patreon.com/posts/complete-list-of-158388927" target="_blank" rel="noopener">empirically mapped by the DMM developer</a>.
+      The deep-probe step below catches the long tail.
     </p>
   </details>
 
@@ -337,19 +334,26 @@
   // releases that still work) and the user can always untick those
   // before scooping.
   //
-  // Pattern decomposition:
-  //   \[(rartv|rarbg|eztv)\]     bracket-tagged release groups
-  //   \b(YTS|Erai-raws|CR)\b     word-bounded scene names
-  //   (WEB-?Rip|WEB-?DL|AMZN|DSNP) source identifiers; the optional
-  //                                hyphen catches "WEBRip" and
-  //                                "WEB-Rip" alike (real-world
-  //                                torrents use both spellings)
+  // Encodes the two empirical rules mapped by the Debrid Media
+  // Manager developer (yowmamasita) against several thousand scene
+  // releases — the canonical reference for which filenames RD's
+  // May-2026 "infringing_file" filter rejects:
+  //   https://www.patreon.com/posts/complete-list-of-158388927
+  //
+  // Rule 1 — substring (case-insensitive, anywhere):
+  //   web-dl, webrip, bdrip, hdrip, dvdrip
+  // Rule 2 — Source.Codec dot-adjacency (literal dot, case-insensitive,
+  // asymmetric — HDTV.h264 is NOT blocked, Blu-Ray.x264 is NOT blocked):
+  //   BluRay.x264, HDTV.x264, HDTV.XviD, WEB.x264, WEB.h264
+  //
+  // Server's main.go ships the same fallback; this constant only
+  // applies if /api/config never lands.
   //
   // Operator can override via the RD_BLOCKED_FILENAME_REGEX env var
-  // (exposed through /api/config) to update the pattern between
-  // releases without rebuilding.
+  // (exposed through /api/config) to track future RD rule changes
+  // without rebuilding.
   const RD_BLOCKED_FILENAME_FALLBACK =
-    "\\[(rartv|rarbg|eztv)\\]|\\b(YTS|Erai-raws|CR)\\b|(WEB-?Rip|WEB-?DL|AMZN|DSNP)";
+    "web-dl|webrip|bdrip|hdrip|dvdrip|BluRay\\.x264|HDTV\\.x264|HDTV\\.XviD|WEB\\.x264|WEB\\.h264";
   let _rdRegex = null, _rdRegexSource = null;
   function rdBlockedFilenameRegex() {
     const src = (window.litterbox && window.litterbox.cfg && window.litterbox.cfg.rdBlockedFilenameRegex)
@@ -568,11 +572,13 @@
   // bakedInRegexTokens is the set of tokens already covered by
   // RD_BLOCKED_FILENAME_REGEX — used by the discovery analysis to
   // filter OUT candidates that wouldn't actually be a new pattern.
-  // Kept in sync manually with the regex above; small enough that
-  // a comment-driven approach is fine.
+  // Kept in sync manually with the regex above. The dot-adjacency
+  // rule's tokens (BluRay/HDTV/WEB/x264/h264/XviD) are intentionally
+  // omitted — they're not blocked individually, only in specific
+  // pairings; discovery should still surface them if they correlate
+  // outside those pairings.
   const bakedInRegexTokens = new Set([
-    "rartv", "rarbg", "eztv", "yts", "erai-raws", "cr",
-    "webrip", "web-dl", "amzn", "dsnp",
+    "web-dl", "webrip", "bdrip", "hdrip", "dvdrip",
   ]);
 
   // ============================================================

@@ -127,11 +127,29 @@ func main() {
 		// take effect.
 		RedditMegathreadURL: os.Getenv("REDDIT_MEGATHREAD_URL"),
 		// RD_BLOCKED_FILENAME_REGEX — fast-pass filename detector for
-		// the May-2026 RD filter. Operator can update between releases
-		// without a rebuild as the community surfaces new patterns.
-		// Fallback is the regex baked in at this release.
+		// the May-2026 RD "infringing_file" (error_code 35) filter.
+		// The default encodes the two empirical rules mapped by the
+		// Debrid Media Manager developer (yowmamasita) against several
+		// thousand scene releases:
+		//   https://www.patreon.com/posts/complete-list-of-158388927
+		//
+		// Rule 1 — substring match (case-insensitive, anywhere in name):
+		//   web-dl, webrip, bdrip, hdrip, dvdrip
+		//   These are literal substrings; "WEB-Rip" with a hyphen does
+		//   NOT contain "webrip" and is therefore not blocked. We
+		//   deliberately do not widen the alternation to match that.
+		//
+		// Rule 2 — Source.Codec dot-adjacency (case-insensitive,
+		// literal dot, asymmetric per RD):
+		//   BluRay.x264, HDTV.x264, HDTV.XviD, WEB.x264, WEB.h264
+		//   HDTV.h264 is NOT blocked even though HDTV.x264 is; the
+		//   hyphenated form Blu-Ray.x264 is also not blocked because
+		//   the hyphen breaks the dot-adjacency.
+		//
+		// Operator can override via the env var to track future RD
+		// rule changes without a rebuild.
 		RDBlockedFilenameRegex: envOr("RD_BLOCKED_FILENAME_REGEX",
-			`\[(rartv|rarbg|eztv)\]|\b(YTS|Erai-raws|CR)\b|(WEB-?Rip|WEB-?DL|AMZN|DSNP)`),
+			`web-dl|webrip|bdrip|hdrip|dvdrip|BluRay\.x264|HDTV\.x264|HDTV\.XviD|WEB\.x264|WEB\.h264`),
 	}
 	srv, err := server.New(log, webRoot, cfg, outboundProxies, outboundUA, tlsFingerprint)
 	if err != nil {
