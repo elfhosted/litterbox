@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.3](https://github.com/elfhosted/litterbox/compare/1.8.2...1.8.3) (2026-05-16)
+
+
+### Bug Fixes
+
+* **filter:** align RD-block regex with DMM dev's empirical 2-rule map ([#23](https://github.com/elfhosted/litterbox/issues/23)) ([ff3cef9](https://github.com/elfhosted/litterbox/commit/ff3cef9961dab3d2b5f6279ca4880f4aa439c59a))
+
 ## [1.8.2](https://github.com/elfhosted/litterbox/compare/1.8.1...1.8.2) (2026-05-15)
 
 
