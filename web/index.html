@@ -59,31 +59,27 @@
   <section class="detect">
     <h2>🔬 What we detect (no sign-in required)</h2>
     <p class="muted small">
-      LitterBox's fast pass flags torrents whose filenames match release-naming patterns
-      ElfHosted has documented as correlated with the May 2026 filter. Built from
-      community-reported reports; refined per release.
+      LitterBox's fast pass flags torrents whose filenames match the exact two-rule
+      pattern RD's "infringing_file" filter rejects on —
+      <a href="https://www.patreon.com/posts/complete-list-of-158388927" target="_blank" rel="noopener">empirically mapped by the Debrid Media Manager developer</a>
+      against several thousand scene uploads.
     </p>
     <div class="regex-chips">
       <div class="chip-group">
-        <p class="chip-group-label">Bracket-tagged groups</p>
-        <span class="chip">[rartv]</span>
-        <span class="chip">[rarbg]</span>
-        <span class="chip">[eztv]</span>
+        <p class="chip-group-label">Source substrings (anywhere in filename)</p>
+        <span class="chip">web-dl</span>
+        <span class="chip">webrip</span>
+        <span class="chip">bdrip</span>
+        <span class="chip">hdrip</span>
+        <span class="chip">dvdrip</span>
       </div>
       <div class="chip-group">
-        <p class="chip-group-label">Scene release names</p>
-        <span class="chip">YTS</span>
-        <span class="chip">Erai-raws</span>
-        <span class="chip">CR</span>
-      </div>
-      <div class="chip-group">
-        <p class="chip-group-label">Source markers</p>
-        <span class="chip">WEB-DL</span>
-        <span class="chip">WEBDL</span>
-        <span class="chip">WEB-Rip</span>
-        <span class="chip">WEBRip</span>
-        <span class="chip">AMZN</span>
-        <span class="chip">DSNP</span>
+        <p class="chip-group-label">Source.Codec dot-adjacency</p>
+        <span class="chip">BluRay.x264</span>
+        <span class="chip">HDTV.x264</span>
+        <span class="chip">HDTV.XviD</span>
+        <span class="chip">WEB.x264</span>
+        <span class="chip">WEB.h264</span>
       </div>
     </div>
     <p class="muted small">
