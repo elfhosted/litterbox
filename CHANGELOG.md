@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.4](https://github.com/elfhosted/litterbox/compare/1.8.3...1.8.4) (2026-10-04)
+
+
+### Bug Fixes
+
+* **filter:** track RD's 2026-10-03 filename rule, case-sensitively ([#26](https://github.com/elfhosted/litterbox/issues/26)) ([0c9aadc](https://github.com/elfhosted/litterbox/commit/0c9aadcc67bf0f8b669b6220ef2398da5184e7fb))
+
 ## [1.8.3](https://github.com/elfhosted/litterbox/compare/1.8.2...1.8.3) (2026-05-16)
 
 
