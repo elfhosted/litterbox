@@ -20,26 +20,20 @@
     <summary>🔬 LitterBox detects these filename patterns out of the box <span class="muted small">(click to expand)</span></summary>
     <div class="regex-chips">
       <div class="chip-group">
-        <p class="chip-group-label">Source substrings (anywhere in filename)</p>
-        <span class="chip">web-dl</span>
-        <span class="chip">webrip</span>
-        <span class="chip">bdrip</span>
-        <span class="chip">hdrip</span>
-        <span class="chip">dvdrip</span>
-      </div>
-      <div class="chip-group">
-        <p class="chip-group-label">Source.Codec dot-adjacency</p>
-        <span class="chip">BluRay.x264</span>
+        <p class="chip-group-label">Anywhere in the filename, exact case</p>
+        <span class="chip">WEB-DL</span>
+        <span class="chip">WEB.x264</span>
+        <span class="chip">WEB.H264</span>
         <span class="chip">HDTV.x264</span>
         <span class="chip">HDTV.XviD</span>
-        <span class="chip">WEB.x264</span>
-        <span class="chip">WEB.h264</span>
       </div>
     </div>
     <p class="muted small">
-      Fast-pass detection — the exact 2-rule set RD's "infringing_file" filter blocks on,
-      <a href="https://www.patreon.com/posts/complete-list-of-158388927" target="_blank" rel="noopener">empirically mapped by the DMM developer</a>.
-      The deep-probe step below catches the long tail.
+      Fast-pass detection — the five strings RD's "infringing_file" filter blocks on
+      (October 2026), <a href="https://www.patreon.com/posts/complete-list-of-158388927" target="_blank" rel="noopener">empirically mapped by the DMM developer</a>.
+      <code>web-dl</code> and <code>WEB.h264</code> pass; WEBRip, BDRip, HDRip, DVDRip and BluRay.x264 are no longer blocked.
+      RD also checks each file's own name at download time, so a cleanly named pack can still hold blocked
+      episodes — the deep-probe step below catches those and the long tail.
     </p>
   </details>
 
@@ -334,17 +328,22 @@
   // releases that still work) and the user can always untick those
   // before scooping.
   //
-  // Encodes the two empirical rules mapped by the Debrid Media
-  // Manager developer (yowmamasita) against several thousand scene
-  // releases — the canonical reference for which filenames RD's
-  // May-2026 "infringing_file" filter rejects:
+  // Encodes RD's "infringing_file" filename rule as re-mapped by the
+  // Debrid Media Manager developer (yowmamasita) on 2026-10-03, over
+  // fresh torrents of random data so only the name decided:
   //   https://www.patreon.com/posts/complete-list-of-158388927
   //
-  // Rule 1 — substring (case-insensitive, anywhere):
-  //   web-dl, webrip, bdrip, hdrip, dvdrip
-  // Rule 2 — Source.Codec dot-adjacency (literal dot, case-insensitive,
-  // asymmetric — HDTV.h264 is NOT blocked, Blu-Ray.x264 is NOT blocked):
-  //   BluRay.x264, HDTV.x264, HDTV.XviD, WEB.x264, WEB.h264
+  // RD refuses a name containing any of five strings, EXACT case and
+  // separator, anywhere in the name:
+  //   WEB-DL, WEB.x264, WEB.H264, HDTV.x264, HDTV.XviD
+  // web-dl, WEB.h264, WEB.X264, WEB.DL and WEBDL all pass, so the
+  // pattern is compiled WITHOUT the "i" flag. WEBRip, BDRip, HDRip,
+  // DVDRip and BluRay.x264 were blocked May–Sep 2026 and now pass.
+  //
+  // RD checks the torrent name when it's added and each file's own
+  // name at /unrestrict/link. This pass only sees the torrent name, so
+  // a cleanly named pack holding WEB-DL episodes is left to the deep
+  // probe.
   //
   // Server's main.go ships the same fallback; this constant only
   // applies if /api/config never lands.
@@ -353,13 +352,13 @@
   // (exposed through /api/config) to track future RD rule changes
   // without rebuilding.
   const RD_BLOCKED_FILENAME_FALLBACK =
-    "web-dl|webrip|bdrip|hdrip|dvdrip|BluRay\\.x264|HDTV\\.x264|HDTV\\.XviD|WEB\\.x264|WEB\\.h264";
+    "WEB-DL|WEB\\.x264|WEB\\.H264|HDTV\\.x264|HDTV\\.XviD";
   let _rdRegex = null, _rdRegexSource = null;
   function rdBlockedFilenameRegex() {
     const src = (window.litterbox && window.litterbox.cfg && window.litterbox.cfg.rdBlockedFilenameRegex)
       || RD_BLOCKED_FILENAME_FALLBACK;
     if (src !== _rdRegexSource) {
-      _rdRegex = new RegExp(src, "i");
+      _rdRegex = new RegExp(src);
       _rdRegexSource = src;
     }
     return _rdRegex;
@@ -498,6 +497,38 @@
     localStorage.setItem(RELEASE_AGG_KEY, JSON.stringify(agg));
   }
 
+  // One-time migration when RD's filter rule changes. RD narrowed the
+  // rule on 2026-10-03, so a "filtered" verdict recorded before then
+  // may be for a release RD now serves (WEBRip, BDRip, BluRay.x264...).
+  // Drop those verdicts so the deep probe asks RD again instead of
+  // offering the torrent for deletion from history, and clear the
+  // aggregates so maybeRebuildAggregates re-derives them from the
+  // pruned cache rather than re-suggesting retired patterns. "healthy"
+  // verdicts are kept: the old rule was strictly broader. Bump
+  // RD_RULE_EPOCH (and its cutoff) on the next rule change.
+  const RD_RULE_EPOCH_KEY = "litterbox:rdRuleEpoch";
+  const RD_RULE_EPOCH = "2026-10-03";
+  const RD_RULE_CUTOFF_MS = Date.UTC(2026, 9, 4); // verdicts before this are pre-change
+  function migrateRuleEpoch() {
+    try {
+      if (localStorage.getItem(RD_RULE_EPOCH_KEY) === RD_RULE_EPOCH) return;
+      const cache = loadProbeCache();
+      let dropped = 0;
+      for (const [hash, v] of Object.entries(cache)) {
+        if (v && v.outcome === "filtered" && !(v.at >= RD_RULE_CUTOFF_MS)) {
+          delete cache[hash];
+          dropped++;
+        }
+      }
+      if (dropped > 0) saveProbeCache(cache);
+      localStorage.removeItem(RELEASE_AGG_KEY);
+      localStorage.setItem(RD_RULE_EPOCH_KEY, RD_RULE_EPOCH);
+    } catch {
+      // Storage unavailable: nothing cached to migrate.
+    }
+  }
+  migrateRuleEpoch();
+
   // maybeRebuildAggregates — on first scan after upgrade, populate
   // releaseAggregates by re-parsing every cached probe verdict's
   // filename. Lets users carry forward signal from prior probe
@@ -572,13 +603,14 @@
   // bakedInRegexTokens is the set of tokens already covered by
   // RD_BLOCKED_FILENAME_REGEX — used by the discovery analysis to
   // filter OUT candidates that wouldn't actually be a new pattern.
-  // Kept in sync manually with the regex above. The dot-adjacency
-  // rule's tokens (BluRay/HDTV/WEB/x264/h264/XviD) are intentionally
-  // omitted — they're not blocked individually, only in specific
-  // pairings; discovery should still surface them if they correlate
-  // outside those pairings.
+  // Kept in sync manually with the regex above. Values are in
+  // parseRelease's normalised form (lower-case, hyphens stripped), so
+  // WEB-DL is "webdl". The Source.Codec strings (WEB.x264, HDTV.XviD,
+  // ...) are intentionally omitted — their tokens aren't blocked on
+  // their own, so discovery should still surface them if they
+  // correlate outside those pairings.
   const bakedInRegexTokens = new Set([
-    "web-dl", "webrip", "bdrip", "hdrip", "dvdrip",
+    "webdl",
   ]);
 
   // ============================================================
