@@ -497,6 +497,38 @@
     localStorage.setItem(RELEASE_AGG_KEY, JSON.stringify(agg));
   }
 
+  // One-time migration when RD's filter rule changes. RD narrowed the
+  // rule on 2026-10-03, so a "filtered" verdict recorded before then
+  // may be for a release RD now serves (WEBRip, BDRip, BluRay.x264...).
+  // Drop those verdicts so the deep probe asks RD again instead of
+  // offering the torrent for deletion from history, and clear the
+  // aggregates so maybeRebuildAggregates re-derives them from the
+  // pruned cache rather than re-suggesting retired patterns. "healthy"
+  // verdicts are kept: the old rule was strictly broader. Bump
+  // RD_RULE_EPOCH (and its cutoff) on the next rule change.
+  const RD_RULE_EPOCH_KEY = "litterbox:rdRuleEpoch";
+  const RD_RULE_EPOCH = "2026-10-03";
+  const RD_RULE_CUTOFF_MS = Date.UTC(2026, 9, 4); // verdicts before this are pre-change
+  function migrateRuleEpoch() {
+    try {
+      if (localStorage.getItem(RD_RULE_EPOCH_KEY) === RD_RULE_EPOCH) return;
+      const cache = loadProbeCache();
+      let dropped = 0;
+      for (const [hash, v] of Object.entries(cache)) {
+        if (v && v.outcome === "filtered" && !(v.at >= RD_RULE_CUTOFF_MS)) {
+          delete cache[hash];
+          dropped++;
+        }
+      }
+      if (dropped > 0) saveProbeCache(cache);
+      localStorage.removeItem(RELEASE_AGG_KEY);
+      localStorage.setItem(RD_RULE_EPOCH_KEY, RD_RULE_EPOCH);
+    } catch {
+      // Storage unavailable: nothing cached to migrate.
+    }
+  }
+  migrateRuleEpoch();
+
   // maybeRebuildAggregates — on first scan after upgrade, populate
   // releaseAggregates by re-parsing every cached probe verdict's
   // filename. Lets users carry forward signal from prior probe
