@@ -59,31 +59,24 @@
   <section class="detect">
     <h2>🔬 What we detect (no sign-in required)</h2>
     <p class="muted small">
-      LitterBox's fast pass flags torrents whose filenames match the exact two-rule
-      pattern RD's "infringing_file" filter rejects on —
-      <a href="https://www.patreon.com/posts/complete-list-of-158388927" target="_blank" rel="noopener">empirically mapped by the Debrid Media Manager developer</a>
-      against several thousand scene uploads.
+      LitterBox's fast pass flags torrents whose filenames contain one of the five
+      strings RD's "infringing_file" filter rejects on (exact case, as of October 2026) —
+      <a href="https://www.patreon.com/posts/complete-list-of-158388927" target="_blank" rel="noopener">empirically mapped by the Debrid Media Manager developer</a>.
+      WEBRip, BDRip, HDRip, DVDRip and BluRay.x264 are no longer blocked.
     </p>
     <div class="regex-chips">
       <div class="chip-group">
-        <p class="chip-group-label">Source substrings (anywhere in filename)</p>
-        <span class="chip">web-dl</span>
-        <span class="chip">webrip</span>
-        <span class="chip">bdrip</span>
-        <span class="chip">hdrip</span>
-        <span class="chip">dvdrip</span>
-      </div>
-      <div class="chip-group">
-        <p class="chip-group-label">Source.Codec dot-adjacency</p>
-        <span class="chip">BluRay.x264</span>
+        <p class="chip-group-label">Anywhere in the filename, exact case</p>
+        <span class="chip">WEB-DL</span>
+        <span class="chip">WEB.x264</span>
+        <span class="chip">WEB.H264</span>
         <span class="chip">HDTV.x264</span>
         <span class="chip">HDTV.XviD</span>
-        <span class="chip">WEB.x264</span>
-        <span class="chip">WEB.h264</span>
       </div>
     </div>
     <p class="muted small">
-      The fast pass catches the bulk of the May 2026 class instantly.
+      The fast pass catches the bulk of the filtered class instantly. RD also checks each
+      file's own name at download time, so a cleanly named pack can still hold blocked episodes.
       A second <strong>deep probe</strong> (opt-in) hits <code>/unrestrict/link</code>
       per-torrent to surface the long tail the regex misses.
       <a href="https://github.com/elfhosted/litterbox/blob/main/web/dashboard.html" target="_blank" rel="noopener">Verify the source</a>.

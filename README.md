@@ -41,12 +41,14 @@ slow (~14h for a 10k library at RD's 250 req/min ceiling).
 
 LitterBox uses a two-pass approach:
 
-1. **Fast pass** — a baked-in filename regex that matches the
-   release-naming patterns ElfHosted has already documented as
-   filter-correlated (group tags, source markers like AMZN/WEB-DL,
-   etc.). Free, instant, catches the bulk of the May 2026 class.
-   Refined manually on each release from community-curated input
-   (see below).
+1. **Fast pass** — a baked-in, case-sensitive filename regex for the
+   five strings RD refuses as of 2026-10-03 (`WEB-DL`, `WEB.x264`,
+   `WEB.H264`, `HDTV.x264`, `HDTV.XviD`, exact case, per the
+   [DMM developer's mapping](https://www.patreon.com/posts/complete-list-of-158388927)).
+   Free, instant, catches the bulk of the filtered class. It only sees
+   the torrent name; RD also checks each file's own name at
+   `/unrestrict/link`, which the deep probe covers. Overridable via
+   `RD_BLOCKED_FILENAME_REGEX`.
 
 2. **Deep probe** — for the long tail the regex misses, the user
    can opt into a per-torrent `/unrestrict/link` walk that surfaces

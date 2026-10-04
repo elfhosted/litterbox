@@ -127,29 +127,21 @@ func main() {
 		// take effect.
 		RedditMegathreadURL: os.Getenv("REDDIT_MEGATHREAD_URL"),
 		// RD_BLOCKED_FILENAME_REGEX — fast-pass filename detector for
-		// the May-2026 RD "infringing_file" (error_code 35) filter.
-		// The default encodes the two empirical rules mapped by the
-		// Debrid Media Manager developer (yowmamasita) against several
-		// thousand scene releases:
+		// RD's "infringing_file" (error_code 35) filter, as re-mapped by
+		// the Debrid Media Manager developer on 2026-10-03:
 		//   https://www.patreon.com/posts/complete-list-of-158388927
 		//
-		// Rule 1 — substring match (case-insensitive, anywhere in name):
-		//   web-dl, webrip, bdrip, hdrip, dvdrip
-		//   These are literal substrings; "WEB-Rip" with a hyphen does
-		//   NOT contain "webrip" and is therefore not blocked. We
-		//   deliberately do not widen the alternation to match that.
-		//
-		// Rule 2 — Source.Codec dot-adjacency (case-insensitive,
-		// literal dot, asymmetric per RD):
-		//   BluRay.x264, HDTV.x264, HDTV.XviD, WEB.x264, WEB.h264
-		//   HDTV.h264 is NOT blocked even though HDTV.x264 is; the
-		//   hyphenated form Blu-Ray.x264 is also not blocked because
-		//   the hyphen breaks the dot-adjacency.
+		// RD refuses a name containing any of these five strings, with
+		// EXACT case and separator, anywhere in the name:
+		//   WEB-DL, WEB.x264, WEB.H264, HDTV.x264, HDTV.XviD
+		// web-dl, WEB.h264, WEB.X264, WEB.DL and WEBDL all pass, so the
+		// dashboard matches this pattern case-sensitively. WEBRip, BDRip,
+		// HDRip, DVDRip and BluRay.x264 (blocked May–Sep 2026) now pass.
 		//
 		// Operator can override via the env var to track future RD
 		// rule changes without a rebuild.
 		RDBlockedFilenameRegex: envOr("RD_BLOCKED_FILENAME_REGEX",
-			`web-dl|webrip|bdrip|hdrip|dvdrip|BluRay\.x264|HDTV\.x264|HDTV\.XviD|WEB\.x264|WEB\.h264`),
+			`WEB-DL|WEB\.x264|WEB\.H264|HDTV\.x264|HDTV\.XviD`),
 	}
 	srv, err := server.New(log, webRoot, cfg, outboundProxies, outboundUA, tlsFingerprint)
 	if err != nil {
